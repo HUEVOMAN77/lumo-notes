@@ -10,4 +10,4 @@
 - [x] Actualizar nombre visible de la aplicación y metadatos de Android.
 - [x] Añadir pruebas deterministas para la lógica de notas y verificar tipos/lint.
 - [x] Redactar README con instalación, funcionalidades y estructura del proyecto.
-- [ ] Crear un repositorio privado de GitHub y subir el código completo.
+- [x] Crear un repositorio privado de GitHub y subir el código completo.
