@@ -12,3 +12,10 @@
 - [x] Redactar README con instalación, funcionalidades y estructura del proyecto.
 - [x] Crear un repositorio privado de GitHub y subir el código completo.
 - [x] Optimizar los recursos del icono oficial por debajo del límite de guardado y sincronizar el ajuste con GitHub.
+- [x] Añadir recordatorios locales programables con notificación y acciones para completar o posponer.
+- [x] Permitir adjuntar y visualizar imágenes en una nota mediante el selector del dispositivo.
+- [x] Diseñar temas Claro, Ónix, Neón, Atardecer y Aurora con persistencia de preferencias.
+- [x] Añadir transiciones y microanimaciones accesibles para crear, guardar y cambiar temas.
+- [x] Crear experiencias distintivas: cápsulas de tiempo, estado de ánimo de la nota y modo enfoque.
+- [x] Actualizar pruebas y documentación para la expansión.
+- [ ] Crear una versión recuperable y sincronizar la expansión con el repositorio de GitHub.

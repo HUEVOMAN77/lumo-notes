@@ -5,13 +5,15 @@ import { NoteList } from "@/components/note-list";
 import { ScreenContainer } from "@/components/screen-container";
 import { sortNotesByUpdatedAt } from "@/lib/notes";
 import { useNotes } from "@/lib/notes-provider";
+import { useColors } from "@/hooks/use-colors";
 
 export default function ArchiveScreen() {
   const { notes, updateNote } = useNotes();
+  const colors = useColors();
   const archivedNotes = useMemo(() => sortNotesByUpdatedAt(notes.filter((note) => note.isArchived)), [notes]);
   return (
     <ScreenContainer>
-      <View style={styles.header}><Text style={styles.eyebrow}>ORDENADO, NO OLVIDADO</Text><Text style={styles.title}>Archivo</Text><Text style={styles.subtitle}>Guarda aquí lo que no necesitas ver ahora.</Text></View>
+      <View style={styles.header}><Text style={[styles.eyebrow, { color: colors.primary }]}>ORDENADO, NO OLVIDADO</Text><Text style={[styles.title, { color: colors.foreground }]}>Archivo</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Guarda aquí lo que no necesitas ver ahora.</Text></View>
       <NoteList notes={archivedNotes} emptyTitle="El archivo está despejado" emptyDescription="Cuando archives una nota, seguirá disponible aquí." onToggleFavorite={(note) => void updateNote(note.id, { isFavorite: !note.isFavorite })} />
     </ScreenContainer>
   );

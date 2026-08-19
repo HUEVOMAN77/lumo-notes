@@ -5,13 +5,15 @@ import { NoteList } from "@/components/note-list";
 import { ScreenContainer } from "@/components/screen-container";
 import { sortNotesByUpdatedAt } from "@/lib/notes";
 import { useNotes } from "@/lib/notes-provider";
+import { useColors } from "@/hooks/use-colors";
 
 export default function FavoritesScreen() {
   const { notes, updateNote } = useNotes();
+  const colors = useColors();
   const favorites = useMemo(() => sortNotesByUpdatedAt(notes.filter((note) => note.isFavorite && !note.isArchived)), [notes]);
   return (
     <ScreenContainer>
-      <View style={styles.header}><Text style={styles.eyebrow}>ACCESO RÁPIDO</Text><Text style={styles.title}>Favoritas</Text><Text style={styles.subtitle}>Las notas que quieres tener cerca.</Text></View>
+      <View style={styles.header}><Text style={[styles.eyebrow, { color: colors.primary }]}>ACCESO RÁPIDO</Text><Text style={[styles.title, { color: colors.foreground }]}>Favoritas</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Las notas que quieres tener cerca.</Text></View>
       <NoteList notes={favorites} emptyTitle="Todavía no tienes favoritas" emptyDescription="Marca con una estrella las ideas que quieras recordar primero." onToggleFavorite={(note) => void updateNote(note.id, { isFavorite: !note.isFavorite })} />
     </ScreenContainer>
   );

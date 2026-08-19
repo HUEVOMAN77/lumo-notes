@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createNote, matchesNoteSearch, sortNotesByUpdatedAt, updateNoteRecord } from "../lib/notes";
+import { createNote, isTimeCapsuleLocked, matchesNoteSearch, notePreview, sortNotesByUpdatedAt, updateNoteRecord } from "../lib/notes";
 
 describe("modelo de notas de Lumo Notes", () => {
   it("crea una nota local con valores seguros por defecto", () => {
@@ -42,5 +42,14 @@ describe("modelo de notas de Lumo Notes", () => {
     const newer = { ...createNote({ title: "Última" }), updatedAt: "2026-02-01T09:00:00.000Z" };
 
     expect(sortNotesByUpdatedAt([older, newer]).map((note) => note.title)).toEqual(["Última", "Primera"]);
+  });
+
+  it("protege el contenido de una cápsula de tiempo hasta la fecha elegida", () => {
+    const note = createNote({ content: "Una idea para mi yo del futuro" });
+    note.unlockAt = "2026-08-21T09:00:00.000Z";
+
+    expect(isTimeCapsuleLocked(note, new Date("2026-08-20T09:00:00.000Z").getTime())).toBe(true);
+    expect(isTimeCapsuleLocked(note, new Date("2026-08-22T09:00:00.000Z").getTime())).toBe(false);
+    expect(notePreview(note)).toBe("Esta cápsula guarda una idea para tu yo del futuro.");
   });
 });

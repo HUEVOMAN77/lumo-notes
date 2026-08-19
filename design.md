@@ -39,3 +39,20 @@ Cada nota se guardará localmente mediante almacenamiento persistente y tendrá 
 ## Accesibilidad y respuesta
 
 Los textos secundarios mantendrán contraste legible, las acciones tendrán etiquetas accesibles y los iconos no serán el único medio para explicar acciones relevantes. Las pulsaciones tendrán cambios suaves de opacidad y háptica ligera en acciones primarias compatibles con Android. Las transiciones se mantendrán por debajo de 300 ms para que la aplicación se perciba ágil sin distraer.
+
+## Expansión: ideas con pulso
+
+La evolución de Lumo Notes añade un conjunto de experiencias locales que transforman la libreta en un espacio de memoria personal. Cada nota puede incluir hasta cuatro imágenes, un recordatorio local con acciones de completar o posponer, y un **pulso de idea** —Calma, Chispa, Enfoque o Valentía— para dar contexto emocional sin obligar a escribir etiquetas adicionales.
+
+Las **cápsulas de tiempo** permiten cerrar una nota hasta mañana o una fecha posterior; antes de abrirse, la tarjeta protege su contenido y comunica cuándo volverá a estar disponible. El **modo enfoque** muestra únicamente la idea más reciente en la pantalla principal y reduce el ruido visual. Ninguna de estas funciones requiere una cuenta: adjuntos, estados, recordatorios y preferencias continúan guardándose en el dispositivo.
+
+| Tema | Atmósfera | Uso recomendado |
+|---|---|---|
+| Lumo | Violeta editorial | Captura diaria y organización general. |
+| Blanco | Papel luminoso | Lectura prolongada y máxima sobriedad. |
+| Ónix | Negro profundo | Uso nocturno con contraste suave. |
+| Neón | Cian eléctrico y rosa | Sesiones creativas con alta energía. |
+| Atardecer | Coral y ámbar | Escritura reflexiva y planificación. |
+| Aurora | Menta boreal y azul | Concentración y respiración visual. |
+
+Los cambios de tema se aplicarán con una transición breve de opacidad para preservar el contexto y evitar cambios bruscos. El selector visual permite comparar sus colores antes de elegirlos.

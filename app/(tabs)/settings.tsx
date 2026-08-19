@@ -1,50 +1,39 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { haptic } from "@/lib/haptics";
-import { type ThemePreference, useThemeContext } from "@/lib/theme-provider";
+import { useNotes } from "@/lib/notes-provider";
+import { useThemeContext, type ThemePreference } from "@/lib/theme-provider";
+import { AppThemes, type AppThemeId } from "@/lib/_core/theme";
 
-const OPTIONS: { key: ThemePreference; label: string; icon: "light-mode" | "dark-mode" | "brightness-auto" }[] = [
-  { key: "light", label: "Claro", icon: "light-mode" },
-  { key: "dark", label: "Oscuro", icon: "dark-mode" },
-  { key: "system", label: "Sistema", icon: "brightness-auto" },
-];
+const THEME_IDS: AppThemeId[] = ["lumo", "white", "onyx", "neon", "sunset", "aurora"];
 
 export default function SettingsScreen() {
-  const { themePreference, setThemePreference } = useThemeContext();
+  const { themeId, themePreference, setThemePreference, palette } = useThemeContext();
+  const { isFocusMode, setFocusMode } = useNotes();
+  const chooseTheme = (theme: ThemePreference) => { haptic.selection(); setThemePreference(theme); };
+
   return (
     <ScreenContainer>
-      <View style={styles.header}><Text style={styles.eyebrow}>PREFERENCIAS</Text><Text style={styles.title}>Ajustes</Text><Text style={styles.subtitle}>Haz que Lumo se sienta como tu espacio.</Text></View>
-      <View style={styles.section}><Text style={styles.sectionTitle}>Apariencia</Text><View style={styles.choiceGroup}>{OPTIONS.map((option) => {
-        const active = option.key === themePreference;
-        return <Pressable key={option.key} accessibilityRole="radio" accessibilityState={{ checked: active }} onPress={() => { haptic.selection(); setThemePreference(option.key); }} style={({ pressed }) => [styles.choice, active && styles.choiceActive, pressed && styles.choicePressed]}><MaterialIcons name={option.icon} size={21} color={active ? "#FFFFFF" : "#625C70"} /><Text style={[styles.choiceText, active && styles.choiceTextActive]}>{option.label}</Text></Pressable>;
-      })}</View></View>
-      <View style={styles.infoCard}><View style={styles.infoIcon}><MaterialIcons name="verified-user" size={22} color="#2CB67D" /></View><View style={styles.infoCopy}><Text style={styles.infoTitle}>Tus notas son privadas</Text><Text style={styles.infoDescription}>Se guardan solo en este dispositivo, sin cuenta ni sincronización externa.</Text></View></View>
-      <View style={styles.footer}><Text style={styles.footerBrand}>LUMO NOTES</Text><Text style={styles.footerVersion}>Versión 1.0.0</Text></View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={styles.header}><Text style={[styles.eyebrow, { color: palette.primary }]}>PREFERENCIAS EXPRESIVAS</Text><Text style={[styles.title, { color: palette.foreground }]}>Ajustes</Text><Text style={[styles.subtitle, { color: palette.muted }]}>Elige la atmósfera que acompaña tus ideas.</Text></View>
+        <View style={styles.section}><Text style={[styles.sectionTitle, { color: palette.muted }]}>TEMAS</Text><View style={styles.themeGrid}>{THEME_IDS.map((id) => { const theme = AppThemes[id]; const selected = themePreference === id || (themePreference === "system" && themeId === id); return <Pressable key={id} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => chooseTheme(id)} style={({ pressed }) => [styles.themeCard, { backgroundColor: theme.palette.surface, borderColor: selected ? theme.palette.primary : theme.palette.border }, pressed && styles.pressed]}><View style={[styles.preview, { backgroundColor: theme.preview[0] }]}><View style={[styles.previewDot, { backgroundColor: theme.preview[1] }]} /><View style={[styles.previewLine, { backgroundColor: theme.preview[2] }]} /></View><View style={styles.themeCopy}><View><Text style={[styles.themeName, { color: theme.palette.foreground }]}>{theme.label}</Text><Text style={[styles.themeDescription, { color: theme.palette.muted }]}>{theme.description}</Text></View>{selected ? <View style={[styles.selectedIcon, { backgroundColor: theme.palette.primary }]}><MaterialIcons name="check" size={14} color={theme.colorScheme === "dark" && id !== "aurora" ? "#071015" : "#FFFFFF"} /></View> : null}</View></Pressable>; })}</View></View>
+        <Pressable accessibilityRole="radio" accessibilityState={{ checked: themePreference === "system" }} onPress={() => chooseTheme("system")} style={({ pressed }) => [styles.systemRow, { backgroundColor: palette.surface, borderColor: palette.border }, pressed && styles.pressed]}><View style={[styles.systemIcon, { backgroundColor: palette.background }]}><MaterialIcons name="brightness-auto" size={21} color={palette.primary} /></View><View style={styles.systemCopy}><Text style={[styles.systemTitle, { color: palette.foreground }]}>Seguir el sistema</Text><Text style={[styles.systemDescription, { color: palette.muted }]}>Lumo cambia con el modo claro u oscuro de Android.</Text></View><MaterialIcons name={themePreference === "system" ? "radio-button-checked" : "radio-button-unchecked"} size={22} color={palette.primary} /></Pressable>
+        <View style={styles.section}><Text style={[styles.sectionTitle, { color: palette.muted }]}>RITUAL DE ENFOQUE</Text><View style={[styles.focusCard, { backgroundColor: palette.surface, borderColor: palette.border }]}><View style={[styles.focusIcon, { backgroundColor: `${palette.primary}1C` }]}><MaterialIcons name="center-focus-strong" size={23} color={palette.primary} /></View><View style={styles.focusCopy}><Text style={[styles.focusTitle, { color: palette.foreground }]}>Modo enfoque</Text><Text style={[styles.focusDescription, { color: palette.muted }]}>Muestra solo tu idea más reciente para pensar sin ruido.</Text></View><Switch value={isFocusMode} onValueChange={(enabled) => { haptic.selection(); setFocusMode(enabled); }} trackColor={{ false: palette.border, true: palette.primary }} thumbColor="#FFFFFF" /></View></View>
+        <View style={[styles.motionCard, { backgroundColor: `${palette.primary}18`, borderColor: `${palette.primary}36` }]}><MaterialIcons name="auto-awesome" size={21} color={palette.primary} /><View style={styles.motionCopy}><Text style={[styles.motionTitle, { color: palette.foreground }]}>Transiciones vivas</Text><Text style={[styles.motionDescription, { color: palette.muted }]}>Los cambios de tema se suavizan con una animación breve para conservar el contexto visual.</Text></View></View>
+        <View style={[styles.infoCard, { backgroundColor: `${palette.success}18` }]}><View style={[styles.infoIcon, { backgroundColor: `${palette.success}24` }]}><MaterialIcons name="verified-user" size={22} color={palette.success} /></View><View style={styles.infoCopy}><Text style={[styles.infoTitle, { color: palette.foreground }]}>Tus notas siguen siendo privadas</Text><Text style={[styles.infoDescription, { color: palette.muted }]}>Los recordatorios, cápsulas, imágenes y preferencias se guardan en este dispositivo.</Text></View></View>
+        <View style={styles.footer}><Text style={[styles.footerBrand, { color: palette.muted }]}>LUMO NOTES</Text><Text style={[styles.footerVersion, { color: palette.muted }]}>Versión 1.1.0 · Ideas con pulso</Text></View>
+      </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: 20, paddingTop: 14 },
-  eyebrow: { color: "#6D5DFB", fontSize: 11, fontWeight: "800", letterSpacing: 1.1, lineHeight: 16 },
-  title: { color: "#1E1B2E", fontSize: 31, fontWeight: "800", letterSpacing: -0.9, lineHeight: 39, marginTop: 2 },
-  subtitle: { color: "#756F83", fontSize: 15, lineHeight: 22, marginTop: 1 },
-  section: { marginTop: 31, paddingHorizontal: 20 },
-  sectionTitle: { color: "#5C5668", fontSize: 13, fontWeight: "800", letterSpacing: 0.55, marginBottom: 12, textTransform: "uppercase" },
-  choiceGroup: { flexDirection: "row", gap: 8 },
-  choice: { alignItems: "center", backgroundColor: "#F4F2F8", borderColor: "#E7E4EB", borderRadius: 16, borderWidth: 1, flex: 1, flexDirection: "row", gap: 7, justifyContent: "center", minHeight: 52, paddingHorizontal: 8 },
-  choiceActive: { backgroundColor: "#6D5DFB", borderColor: "#6D5DFB" },
-  choicePressed: { opacity: 0.75 },
-  choiceText: { color: "#625C70", fontSize: 13, fontWeight: "800" },
-  choiceTextActive: { color: "#FFFFFF" },
-  infoCard: { alignItems: "flex-start", backgroundColor: "#EAF8F1", borderRadius: 20, flexDirection: "row", gap: 12, marginHorizontal: 20, marginTop: 32, padding: 17 },
-  infoIcon: { alignItems: "center", backgroundColor: "#D4F1E2", borderRadius: 12, height: 42, justifyContent: "center", width: 42 },
-  infoCopy: { flex: 1 },
-  infoTitle: { color: "#1A674A", fontSize: 15, fontWeight: "800", lineHeight: 20 },
-  infoDescription: { color: "#39725B", fontSize: 13, lineHeight: 19, marginTop: 3 },
-  footer: { alignItems: "center", marginTop: "auto", paddingBottom: 28 },
-  footerBrand: { color: "#928B9F", fontSize: 11, fontWeight: "900", letterSpacing: 1.4 },
-  footerVersion: { color: "#AAA4B2", fontSize: 12, marginTop: 5 },
+  scroll: { paddingBottom: 38 }, header: { paddingHorizontal: 20, paddingTop: 14 }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.1, lineHeight: 16 }, title: { fontSize: 31, fontWeight: "800", letterSpacing: -0.9, lineHeight: 39, marginTop: 2 }, subtitle: { fontSize: 15, lineHeight: 22, marginTop: 1 },
+  section: { marginTop: 30, paddingHorizontal: 20 }, sectionTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.9, marginBottom: 12 }, themeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, themeCard: { borderRadius: 17, borderWidth: 1.5, overflow: "hidden", width: "48.3%" }, preview: { height: 55, overflow: "hidden", padding: 11 }, previewDot: { borderRadius: 11, height: 23, opacity: 0.95, width: 23 }, previewLine: { borderRadius: 2, height: 5, marginLeft: 30, marginTop: -14, opacity: 0.92, width: 50 }, themeCopy: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", minHeight: 56, paddingHorizontal: 11 }, themeName: { fontSize: 13, fontWeight: "800" }, themeDescription: { fontSize: 10, marginTop: 2 }, selectedIcon: { alignItems: "center", borderRadius: 10, height: 20, justifyContent: "center", width: 20 }, pressed: { opacity: 0.7, transform: [{ scale: 0.985 }] },
+  systemRow: { alignItems: "center", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 12, marginHorizontal: 20, marginTop: 12, padding: 13 }, systemIcon: { alignItems: "center", borderRadius: 13, height: 42, justifyContent: "center", width: 42 }, systemCopy: { flex: 1 }, systemTitle: { fontSize: 14, fontWeight: "800" }, systemDescription: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  focusCard: { alignItems: "center", borderRadius: 19, borderWidth: 1, flexDirection: "row", gap: 12, padding: 14 }, focusIcon: { alignItems: "center", borderRadius: 14, height: 46, justifyContent: "center", width: 46 }, focusCopy: { flex: 1 }, focusTitle: { fontSize: 15, fontWeight: "800" }, focusDescription: { fontSize: 12, lineHeight: 17, marginTop: 3 },
+  motionCard: { alignItems: "flex-start", borderRadius: 19, borderWidth: 1, flexDirection: "row", gap: 12, marginHorizontal: 20, marginTop: 25, padding: 15 }, motionCopy: { flex: 1 }, motionTitle: { fontSize: 14, fontWeight: "800" }, motionDescription: { fontSize: 12, lineHeight: 18, marginTop: 3 },
+  infoCard: { alignItems: "flex-start", borderRadius: 20, flexDirection: "row", gap: 12, marginHorizontal: 20, marginTop: 14, padding: 17 }, infoIcon: { alignItems: "center", borderRadius: 12, height: 42, justifyContent: "center", width: 42 }, infoCopy: { flex: 1 }, infoTitle: { fontSize: 15, fontWeight: "800", lineHeight: 20 }, infoDescription: { fontSize: 13, lineHeight: 19, marginTop: 3 }, footer: { alignItems: "center", marginTop: 30 }, footerBrand: { fontSize: 11, fontWeight: "900", letterSpacing: 1.4 }, footerVersion: { fontSize: 12, marginTop: 5 },
 });

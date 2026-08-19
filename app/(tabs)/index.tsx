@@ -8,6 +8,7 @@ import { NoteList } from "@/components/note-list";
 import { haptic } from "@/lib/haptics";
 import { matchesNoteSearch, sortNotesByUpdatedAt } from "@/lib/notes";
 import { useNotes } from "@/lib/notes-provider";
+import { useColors } from "@/hooks/use-colors";
 
 /**
  * Home Screen - NativeWind Example
@@ -22,12 +23,16 @@ import { useNotes } from "@/lib/notes-provider";
  * - Custom colors defined in tailwind.config.js
  */
 export default function HomeScreen() {
-  const { notes, isReady, createNote, updateNote } = useNotes();
+  const { notes, isReady, isFocusMode, createNote, updateNote } = useNotes();
+  const colors = useColors();
   const [query, setQuery] = useState("");
   const [activeTag, setActiveTag] = useState("Todas");
 
   const tags = useMemo(() => ["Todas", ...Array.from(new Set(notes.filter((note) => !note.isArchived).map((note) => note.tag).filter(Boolean)))], [notes]);
-  const displayedNotes = useMemo(() => sortNotesByUpdatedAt(notes.filter((note) => !note.isArchived && matchesNoteSearch(note, query) && (activeTag === "Todas" || note.tag === activeTag))), [activeTag, notes, query]);
+  const displayedNotes = useMemo(() => {
+    const matching = sortNotesByUpdatedAt(notes.filter((note) => !note.isArchived && matchesNoteSearch(note, query) && (activeTag === "Todas" || note.tag === activeTag)));
+    return isFocusMode && !query && activeTag === "Todas" ? matching.slice(0, 1) : matching;
+  }, [activeTag, isFocusMode, notes, query]);
 
   const handleCreate = async () => {
     haptic.light();
@@ -38,13 +43,14 @@ export default function HomeScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>TU ESPACIO PERSONAL</Text>
-        <Text style={styles.title}>Lumo Notes</Text>
-        <Text style={styles.subtitle}>Pensamientos claros, siempre a mano.</Text>
-        <View style={styles.searchBox}>
-          <MaterialIcons name="search" size={22} color="#746E83" />
-          <TextInput value={query} onChangeText={setQuery} placeholder="Buscar en tus notas" placeholderTextColor="#918B9C" returnKeyType="search" style={styles.searchInput} />
-          {query ? <Pressable onPress={() => setQuery("")} hitSlop={10}><MaterialIcons name="close" size={19} color="#746E83" /></Pressable> : null}
+        <Text style={[styles.eyebrow, { color: colors.primary }]}>TU ESPACIO PERSONAL</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>Lumo Notes</Text>
+        <Text style={[styles.subtitle, { color: colors.muted }]}>{isFocusMode ? "Una sola idea para pensar sin ruido." : "Pensamientos claros, siempre a mano."}</Text>
+        {isFocusMode ? <View style={[styles.focusBadge, { backgroundColor: `${colors.primary}1C` }]}><MaterialIcons name="center-focus-strong" size={14} color={colors.primary} /><Text style={[styles.focusBadgeText, { color: colors.primary }]}>MODO ENFOQUE</Text></View> : null}
+        <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <MaterialIcons name="search" size={22} color={colors.muted} />
+          <TextInput value={query} onChangeText={setQuery} placeholder="Buscar en tus notas" placeholderTextColor={colors.muted} returnKeyType="search" style={[styles.searchInput, { color: colors.foreground }]} />
+          {query ? <Pressable onPress={() => setQuery("")} hitSlop={10}><MaterialIcons name="close" size={19} color={colors.muted} /></Pressable> : null}
         </View>
       </View>
       <FlatList
@@ -56,18 +62,18 @@ export default function HomeScreen() {
         renderItem={({ item: tag }) => {
           const isActive = activeTag === tag;
           return (
-            <Pressable onPress={() => { haptic.selection(); setActiveTag(tag); }} style={({ pressed }) => [styles.filterTag, isActive && styles.filterTagActive, pressed && styles.tagPressed]}>
-              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{tag}</Text>
+            <Pressable onPress={() => { haptic.selection(); setActiveTag(tag); }} style={({ pressed }) => [styles.filterTag, { backgroundColor: isActive ? colors.primary : colors.surface }, pressed && styles.tagPressed]}>
+              <Text style={[styles.filterText, { color: isActive ? colors.background : colors.muted }]}>{tag}</Text>
             </Pressable>
           );
         }}
         style={styles.tagsContainer}
       />
-      <View style={styles.listHeader}><Text style={styles.listTitle}>{query || activeTag !== "Todas" ? "Resultados" : "Notas recientes"}</Text><Text style={styles.countText}>{displayedNotes.length}</Text></View>
+      <View style={styles.listHeader}><Text style={[styles.listTitle, { color: colors.foreground }]}>{query || activeTag !== "Todas" ? "Resultados" : "Notas recientes"}</Text><Text style={[styles.countText, { backgroundColor: `${colors.primary}1C`, color: colors.primary }]}>{displayedNotes.length}</Text></View>
       {isReady ? (
         <NoteList notes={displayedNotes} emptyTitle={query ? "No hay coincidencias" : "Tu primera idea empieza aquí"} emptyDescription={query ? "Prueba con otra palabra o etiqueta." : "Toca el botón de abajo para crear una nota."} onToggleFavorite={(note) => void updateNote(note.id, { isFavorite: !note.isFavorite })} />
-      ) : <View style={styles.loader}><ActivityIndicator color="#6D5DFB" /></View>}
-      <Pressable accessibilityRole="button" accessibilityLabel="Crear una nota" onPress={() => void handleCreate()} style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}>
+      ) : <View style={styles.loader}><ActivityIndicator color={colors.primary} /></View>}
+      <Pressable accessibilityRole="button" accessibilityLabel="Crear una nota" onPress={() => void handleCreate()} style={({ pressed }) => [styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }, pressed && styles.fabPressed]}>
         <MaterialIcons name="add" size={29} color="#FFFFFF" />
       </Pressable>
     </ScreenContainer>
@@ -79,6 +85,8 @@ const styles = StyleSheet.create({
   eyebrow: { color: "#6D5DFB", fontSize: 11, fontWeight: "800", letterSpacing: 1.1, lineHeight: 16 },
   title: { color: "#1E1B2E", fontSize: 31, fontWeight: "800", letterSpacing: -0.9, lineHeight: 39, marginTop: 2 },
   subtitle: { color: "#756F83", fontSize: 15, lineHeight: 22, marginTop: 1 },
+  focusBadge: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#EFECFF", borderRadius: 999, flexDirection: "row", gap: 5, marginTop: 10, paddingHorizontal: 9, paddingVertical: 5 },
+  focusBadgeText: { color: "#5E4DE4", fontSize: 10, fontWeight: "900", letterSpacing: 0.6 },
   searchBox: { alignItems: "center", backgroundColor: "#F4F2F8", borderColor: "#E8E5EE", borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 10, height: 52, marginTop: 20, paddingHorizontal: 15 },
   searchInput: { color: "#1E1B2E", flex: 1, fontSize: 15, height: "100%" },
   tagsContainer: { flexGrow: 0, marginTop: 16 },

@@ -64,7 +64,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: ["POST_NOTIFICATIONS", "SCHEDULE_EXACT_ALARM"],
     intentFilters: [
       {
         action: "VIEW",
@@ -86,6 +86,19 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    [
+      "expo-notifications",
+      {
+        color: "#6D5DFB",
+        defaultChannel: "lumo-reminders",
+      },
+    ],
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "Permite que Lumo Notes añada imágenes a tus notas privadas.",
+      },
+    ],
     [
       "expo-audio",
       {

@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { haptic } from "@/lib/haptics";
-import { notePreview, type Note } from "@/lib/notes";
+import { formatRelativeUnlockDate, isTimeCapsuleLocked, notePreview, type Note } from "@/lib/notes";
 
 const NOTE_PALETTES = {
   lavender: { background: "#F0EDFF", accent: "#6D5DFB" },
@@ -32,6 +32,7 @@ export function NoteList({ notes, emptyTitle, emptyDescription, onToggleFavorite
       showsVerticalScrollIndicator={false}
       renderItem={({ item: note }) => {
         const palette = NOTE_PALETTES[note.color];
+        const isLocked = isTimeCapsuleLocked(note);
         return (
           <Pressable
             accessibilityRole="button"
@@ -62,7 +63,11 @@ export function NoteList({ notes, emptyTitle, emptyDescription, onToggleFavorite
                 <View style={[styles.tagPill, { borderColor: palette.accent }]}>
                   <Text style={[styles.tagText, { color: palette.accent }]}>{note.tag || "Sin etiqueta"}</Text>
                 </View>
-                <Text style={styles.dateText}>{formatDate(note.updatedAt)}</Text>
+                <View style={styles.metaActions}>
+                  {note.attachments.length ? <MaterialIcons name="image" size={15} color="#766F87" /> : null}
+                  {note.reminderAt ? <MaterialIcons name="notifications-active" size={15} color="#6254EA" /> : null}
+                  {isLocked ? <View style={styles.capsuleMeta}><MaterialIcons name="lock-clock" size={14} color="#99631E" /><Text style={styles.capsuleText}>{formatRelativeUnlockDate(note.unlockAt)}</Text></View> : <Text style={styles.dateText}>{formatDate(note.updatedAt)}</Text>}
+                </View>
               </View>
             </View>
           </Pressable>
@@ -95,6 +100,9 @@ const styles = StyleSheet.create({
   tagPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: "70%" },
   tagText: { fontSize: 11, fontWeight: "700" },
   dateText: { color: "#7A7489", fontSize: 12, fontWeight: "500" },
+  metaActions: { alignItems: "center", flexDirection: "row", gap: 7 },
+  capsuleMeta: { alignItems: "center", flexDirection: "row", gap: 3 },
+  capsuleText: { color: "#99631E", fontSize: 11, fontWeight: "700" },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 34, paddingBottom: 76 },
   emptyIcon: { alignItems: "center", backgroundColor: "#F0EDFF", borderRadius: 20, height: 64, justifyContent: "center", marginBottom: 18, width: 64 },
   emptyTitle: { color: "#1E1B2E", fontSize: 20, fontWeight: "700", lineHeight: 26, textAlign: "center" },
