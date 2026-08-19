@@ -1,64 +1,134 @@
-# Lumo Notes
+# Lumo Notes — Android nativo en Kotlin
 
-**Lumo Notes** es una aplicación de notas para Android diseñada para capturar ideas con rapidez y mantenerlas organizadas en el propio dispositivo. Su interfaz combina una estética editorial cálida con navegación simple, búsqueda local y controles de organización accesibles.
+Lumo Notes es una aplicación Android nativa escrita en **Kotlin** y construida con **Jetpack Compose**, Room y Material 3. Esta versión reemplaza la implementación anterior basada en Expo/React Native/TypeScript y está preparada para compilarse localmente con **Java SDK 17**, Gradle Wrapper y Android `cmdline-tools`.
 
-> Las notas se almacenan localmente en el dispositivo. Esta primera versión no solicita cuentas ni transmite el contenido a un servidor.
+> Las notas se almacenan localmente en el dispositivo. La aplicación no necesita cuenta ni transmite el contenido a un servidor.
 
-## Funcionalidades
+## Requisitos
 
-| Área | Incluye |
+| Herramienta | Requisito |
 |---|---|
-| Captura | Creación de notas, título, contenido, etiqueta y selección de color. |
-| Organización | Favoritos, archivado, restauración y eliminación con confirmación. |
-| Consulta | Búsqueda por título, contenido o etiqueta, además de filtros por etiqueta. |
-| Recordatorios | Avisos locales con opciones de completar o posponer 15 minutos. |
-| Memoria visual | Hasta cuatro imágenes adjuntas y conservadas localmente por nota. |
-| Experiencia | Guardado automático, respuesta háptica selectiva, transiciones breves y modo enfoque. |
-| Ideas con pulso | Estado emocional de la nota y cápsulas de tiempo que protegen contenido hasta la fecha elegida. |
-| Temas | Lumo, Blanco, Ónix, Neón, Atardecer, Aurora o adaptación al sistema. |
-| Identidad | Nombre comercial **Lumo Notes**, icono de hoja con chispa y paleta violeta propia. |
+| Sistema | Windows, macOS o Linux |
+| JDK | Java SDK 17 |
+| Android SDK | `platform-tools`, `platforms;android-35` y `build-tools;35.0.0` |
+| Android cmdline-tools | Versión reciente con `sdkmanager` y `avdmanager` |
+| Gradle | No es necesario instalarlo globalmente; se usa `gradlew`/`gradlew.bat` |
+| Dispositivo | Android API 24 o superior; para avisos se recomienda Android 13+ físico |
 
-## Arquitectura
+## Configuración de variables
 
-La aplicación está construida con **Expo**, **React Native**, **TypeScript** y Expo Router. Las notas se gestionan mediante un contexto local y se guardan con AsyncStorage. El módulo `lib/notes.ts` concentra el modelo de dominio y las funciones puras para crear, actualizar, buscar y ordenar notas; el proveedor `lib/notes-provider.tsx` sincroniza ese modelo con el almacenamiento persistente. Los adjuntos se copian al espacio privado de la aplicación y los recordatorios se programan directamente en Android, sin servidor ni cuenta.
+En Windows PowerShell:
 
-| Ruta o módulo | Responsabilidad |
-|---|---|
-| `app/(tabs)/index.tsx` | Inicio, buscador, filtros por etiquetas y acceso al editor. |
-| `app/(tabs)/favorites.tsx` | Consulta de notas destacadas. |
-| `app/(tabs)/archive.tsx` | Consulta de notas archivadas. |
-| `app/(tabs)/settings.tsx` | Preferencias de apariencia e información de privacidad. |
-| `app/note/[id].tsx` | Editor con guardado automático y acciones de organización. |
-| `lib/notes-provider.tsx` | Persistencia local y estado global de las notas. |
-| `lib/reminders.ts` | Permisos, canal Android, acciones y programación de avisos locales. |
-| `lib/attachments.ts` | Selector de imágenes y conservación de adjuntos dentro de la aplicación. |
-| `lib/theme-provider.tsx` | Temas persistentes, paletas expresivas y transición visual. |
-
-## Ejecución local
-
-Instala las dependencias y ejecuta el entorno de Expo desde la raíz del proyecto.
-
-```bash
-pnpm install
-pnpm dev
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+$env:Path = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\cmdline-tools\latest\bin;$env:Path"
 ```
 
-Para comprobar la calidad del código antes de una entrega, ejecuta las siguientes validaciones.
+En Linux o macOS:
 
 ```bash
-pnpm test
-pnpm check
-pnpm lint
+export JAVA_HOME=/ruta/al/jdk-17
+export ANDROID_HOME=$HOME/Android/Sdk
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 ```
 
-## Recordatorios y permisos
+Instala el SDK desde la línea de comandos, aceptando las licencias cuando se solicite:
 
-Los recordatorios son **locales**: se programan en el dispositivo y no se envían a ningún servicio externo. La primera vez que se programe uno, Android solicitará permiso para mostrar notificaciones. La prueba completa de los avisos debe realizarse en un dispositivo Android físico; el selector de imágenes también se abre mediante la interfaz del sistema.
+```bash
+sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+```
 
-## Generar Android
+## Compilar localmente
 
-Abre el proyecto en Expo Go mediante el código QR del entorno de desarrollo para probarlo en un dispositivo Android. Para producir un APK distribuible, crea primero una versión del proyecto y utiliza el botón **Publish** de la interfaz del proyecto; el proceso administrado generará el paquete Android.
+Desde la raíz del repositorio:
 
-## Próximas extensiones posibles
+En Windows:
 
-La base está preparada para incorporar listas con casillas, exportación de una cápsula como carta, widgets de Android o sincronización opcional. Estas funciones deberían añadirse solo con una decisión explícita sobre privacidad y respaldo de los datos.
+```cmd
+gradlew.bat clean assembleDebug
+```
+
+En Linux o macOS:
+
+```bash
+chmod +x gradlew
+./gradlew clean assembleDebug
+```
+
+El APK de depuración se genera en:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Para instalarlo en un dispositivo conectado con `adb`:
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+También se puede compilar e instalar directamente con:
+
+```bash
+./gradlew installDebug
+```
+
+En Windows se usa el equivalente `gradlew.bat installDebug`.
+
+## Funcionalidades implementadas
+
+La aplicación incluye una introducción visual de bienvenida antes de entrar a las notas, creación y edición de notas, guardado local con Room, búsqueda por título/contenido/etiqueta, favoritos, archivado, eliminación con confirmación, selección de color, adjuntos de imagen mediante el selector del sistema y pantalla de privacidad.
+
+También incorpora tres temas persistentes —**Negro**, **Blanco** y **Neón**— desde Ajustes. El tema elegido se conserva en el dispositivo mediante DataStore. Cada nota puede recibir un recordatorio seleccionando un **día y una hora**; Android programa una alarma local y muestra una notificación. Las alarmas se restauran después de reiniciar el teléfono mediante `BootReceiver`. En Android 13 o superior se debe conceder el permiso de notificaciones cuando la aplicación lo solicite.
+
+## Estructura
+
+| Ruta | Responsabilidad |
+|---|---|
+| `app/src/main/java/com/lumonotes/app/MainActivity.kt` | Actividad principal e interfaz Jetpack Compose |
+| `app/src/main/java/com/lumonotes/app/ui/NotesViewModel.kt` | Estado, filtros, búsqueda y operaciones de notas |
+| `app/src/main/java/com/lumonotes/app/data/Note.kt` | Modelo de dominio y colores |
+| `app/src/main/java/com/lumonotes/app/data/NoteDao.kt` | Consultas Room |
+| `app/src/main/java/com/lumonotes/app/data/NotesDatabase.kt` | Base de datos local |
+| `app/src/main/java/com/lumonotes/app/reminders/ReminderReceiver.kt` | Canal y recepción de notificaciones locales |
+| `app/src/main/java/com/lumonotes/app/reminders/ReminderScheduler.kt` | Programación y cancelación de alarmas |
+| `app/src/main/java/com/lumonotes/app/reminders/BootReceiver.kt` | Restauración de alarmas después de reiniciar |
+| `app/src/main/java/com/lumonotes/app/ui/ThemePreferences.kt` | Temas Negro, Blanco y Neón persistentes |
+| `app/build.gradle.kts` | Configuración Android, Kotlin, Compose y JDK 17 |
+
+## Descargar APK
+
+Puedes descargar la versión de depuración compilada para Android desde [`releases/Lumo-Notes.apk`](releases/Lumo-Notes.apk). El paquete usa el nombre oficial **Lumo Notes**, el identificador `com.lumonotes.app`, `minSdk 24` y `targetSdk 35`.
+
+## Vista previa de la interfaz
+
+La pantalla de bienvenida presenta la identidad visual de Lumo Notes antes de abrir el bloc de notas.
+
+![Pantalla de bienvenida de Lumo Notes](docs/screenshots/intro.png)
+
+La interfaz principal en tema Blanco muestra la búsqueda, los filtros, las tarjetas de notas y la navegación inferior.
+
+![Interfaz principal de Lumo Notes en tema Blanco](docs/screenshots/notas-blanco.png)
+
+El tema Neón utiliza contraste oscuro, turquesa, magenta y amarillo para una experiencia más expresiva.
+
+![Interfaz de Lumo Notes en tema Neón](docs/screenshots/tema-neon.png)
+
+Los recordatorios se configuran desde el editor de una nota seleccionando el día y la hora exactos.
+
+![Configuración de recordatorio en Lumo Notes](docs/screenshots/recordatorio.png)
+
+## Versiones principales
+
+- Kotlin `2.0.21`.
+- Android Gradle Plugin `8.6.1`.
+- Gradle Wrapper `8.7`.
+- Compile SDK y target SDK `35`.
+- Minimum SDK `24`.
+- Java source/target compatibility `17`.
+
+## Nota sobre el entorno
+
+El proyecto contiene el Gradle Wrapper, de modo que no requiere una instalación global de Gradle. Sí requiere que `JAVA_HOME` apunte a un JDK 17 y que `ANDROID_HOME` apunte a un Android SDK que contenga las plataformas y herramientas indicadas arriba.

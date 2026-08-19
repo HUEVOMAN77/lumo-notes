@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="lumo_purple">#6750A4</color>
+    <color name="lumo_background">#F7F5FA</color>
+    <color name="lumo_surface">#FFFFFF</color>
+</resources>
