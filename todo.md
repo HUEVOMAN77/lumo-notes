@@ -11,3 +11,4 @@
 - [x] Añadir pruebas deterministas para la lógica de notas y verificar tipos/lint.
 - [x] Redactar README con instalación, funcionalidades y estructura del proyecto.
 - [x] Crear un repositorio privado de GitHub y subir el código completo.
+- [x] Optimizar los recursos del icono oficial por debajo del límite de guardado y sincronizar el ajuste con GitHub.
