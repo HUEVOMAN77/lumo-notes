@@ -18,4 +18,4 @@
 - [x] Añadir transiciones y microanimaciones accesibles para crear, guardar y cambiar temas.
 - [x] Crear experiencias distintivas: cápsulas de tiempo, estado de ánimo de la nota y modo enfoque.
 - [x] Actualizar pruebas y documentación para la expansión.
-- [ ] Crear una versión recuperable y sincronizar la expansión con el repositorio de GitHub.
+- [x] Crear una versión recuperable y sincronizar la expansión con el repositorio de GitHub.
