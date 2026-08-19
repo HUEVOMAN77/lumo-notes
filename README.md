@@ -1,134 +1,117 @@
-# Lumo Notes — Android nativo en Kotlin
+# Lumo Notes
 
-Lumo Notes es una aplicación Android nativa escrita en **Kotlin** y construida con **Jetpack Compose**, Room y Material 3. Esta versión reemplaza la implementación anterior basada en Expo/React Native/TypeScript y está preparada para compilarse localmente con **Java SDK 17**, Gradle Wrapper y Android `cmdline-tools`.
+> **Tu espacio privado para capturar ideas, organizar momentos y recordar lo importante.**
 
-> Las notas se almacenan localmente en el dispositivo. La aplicación no necesita cuenta ni transmite el contenido a un servidor.
+[Descargar APK](https://github.com/HUEVOMAN77/lumo-notes/releases/download/v1.0.0/Lumo-Notes.apk) · [Ver la versión publicada](https://github.com/HUEVOMAN77/lumo-notes/releases/tag/v1.0.0)
 
-## Requisitos
+Lumo Notes es un bloc de notas para Android pensado para escribir rápido, volver a tus ideas cuando lo necesites y mantener tu contenido dentro de tu dispositivo. No necesitas crear una cuenta y no tienes que enviar tus notas a ningún servicio externo.
 
-| Herramienta | Requisito |
+---
+
+## Qué puedes hacer
+
+| Función | Para qué sirve |
 |---|---|
-| Sistema | Windows, macOS o Linux |
-| JDK | Java SDK 17 |
-| Android SDK | `platform-tools`, `platforms;android-35` y `build-tools;35.0.0` |
-| Android cmdline-tools | Versión reciente con `sdkmanager` y `avdmanager` |
-| Gradle | No es necesario instalarlo globalmente; se usa `gradlew`/`gradlew.bat` |
-| Dispositivo | Android API 24 o superior; para avisos se recomienda Android 13+ físico |
+| **Notas rápidas** | Escribe títulos, contenido y etiquetas sin complicaciones. |
+| **Búsqueda** | Encuentra una nota por título, texto o etiqueta. |
+| **Favoritos** | Marca las ideas que quieres tener siempre a mano. |
+| **Archivo** | Aparta notas sin eliminarlas y restáuralas cuando quieras. |
+| **Colores** | Dale a cada nota una identidad visual diferente. |
+| **Imágenes** | Añade una imagen desde el selector de tu teléfono. |
+| **Recordatorios** | Elige un día y una hora para recibir una notificación. |
+| **Temas** | Cambia entre Negro, Blanco y Neón. |
+| **Privacidad** | Tus notas se guardan localmente en el dispositivo. |
 
-## Configuración de variables
+## Descargar e instalar
 
-En Windows PowerShell:
+Descarga el archivo oficial desde **[Lumo Notes v1.0.0](https://github.com/HUEVOMAN77/lumo-notes/releases/download/v1.0.0/Lumo-Notes.apk)**.
 
-```powershell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-$env:Path = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\cmdline-tools\latest\bin;$env:Path"
-```
+Después, abre el archivo APK desde la carpeta de descargas de tu teléfono y sigue las instrucciones de Android. Si el sistema solicita permiso para instalar aplicaciones descargadas fuera de la tienda, autorízalo para el navegador o el gestor de archivos que estés utilizando. Al terminar, abre **Lumo Notes** desde tu pantalla de aplicaciones.
 
-En Linux o macOS:
+> **Compatibilidad:** Android 7.0 o superior. Para recibir notificaciones, asegúrate de permitirlas cuando Android las solicite.
 
-```bash
-export JAVA_HOME=/ruta/al/jdk-17
-export ANDROID_HOME=$HOME/Android/Sdk
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-```
+## Primeros pasos
 
-Instala el SDK desde la línea de comandos, aceptando las licencias cuando se solicite:
+Al abrir la aplicación verás una breve introducción de bienvenida. Pulsa **“Entrar a mis notas”** o espera a que la pantalla avance automáticamente.
 
-```bash
-sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-```
+Para crear tu primera nota, pulsa el botón **+**, escribe un título y añade el contenido. También puedes poner una etiqueta, elegir un color y adjuntar una imagen. Cuando termines, pulsa el botón de guardar.
 
-## Compilar localmente
+La pantalla principal reúne tus notas y te permite buscar, filtrar y abrir cualquier contenido. Usa la barra inferior para moverte entre **Notas**, **Favoritas**, **Archivo** y **Ajustes**.
 
-Desde la raíz del repositorio:
+## Crear y organizar una nota
 
-En Windows:
+1. Pulsa **+** en la pantalla principal.
+2. Escribe un título y el contenido de la nota.
+3. Añade una etiqueta si quieres encontrarla más fácilmente.
+4. Selecciona un color para identificarla visualmente.
+5. Pulsa **Guardar**.
 
-```cmd
-gradlew.bat clean assembleDebug
-```
+Dentro de cada tarjeta puedes marcar una nota como favorita o enviarla al archivo. Para eliminarla, abre la nota y utiliza **Eliminar nota**. La aplicación solicita confirmación antes de borrar el contenido.
 
-En Linux o macOS:
+## Programar un recordatorio
 
-```bash
-chmod +x gradlew
-./gradlew clean assembleDebug
-```
+Los recordatorios son locales y funcionan directamente en tu teléfono.
 
-El APK de depuración se genera en:
+1. Abre una nota existente o crea una nueva.
+2. Pulsa **“Elegir fecha y hora del recordatorio”**.
+3. Selecciona el día en el calendario.
+4. Selecciona la hora exacta.
+5. Guarda la nota.
 
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
+Android mostrará una notificación en el momento indicado. Si quieres cancelar el aviso, vuelve a abrir la nota y pulsa **“Quitar recordatorio”**. Para que el aviso funcione correctamente, permite las notificaciones de Lumo Notes cuando el sistema las solicite.
 
-Para instalarlo en un dispositivo conectado con `adb`:
+## Elegir un tema
 
-```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
+Abre **Ajustes** y entra en la sección **Temas**. Puedes elegir entre:
 
-También se puede compilar e instalar directamente con:
+- **Blanco**, claro y limpio para el uso diario.
+- **Negro**, sobrio y cómodo para ambientes oscuros.
+- **Neón**, expresivo, colorido y de alto contraste.
 
-```bash
-./gradlew installDebug
-```
+La selección queda guardada para que la aplicación conserve tu estilo la próxima vez que la abras.
 
-En Windows se usa el equivalente `gradlew.bat installDebug`.
+## Privacidad
 
-## Funcionalidades implementadas
+> Lumo Notes está diseñada para guardar tus notas en el dispositivo. No necesitas una cuenta para utilizarla y el contenido de tus notas no se envía a un servidor.
 
-La aplicación incluye una introducción visual de bienvenida antes de entrar a las notas, creación y edición de notas, guardado local con Room, búsqueda por título/contenido/etiqueta, favoritos, archivado, eliminación con confirmación, selección de color, adjuntos de imagen mediante el selector del sistema y pantalla de privacidad.
+Las imágenes adjuntas también permanecen dentro del espacio privado de la aplicación. El permiso de notificaciones solo se utiliza para mostrar los recordatorios que tú programes.
 
-También incorpora tres temas persistentes —**Negro**, **Blanco** y **Neón**— desde Ajustes. El tema elegido se conserva en el dispositivo mediante DataStore. Cada nota puede recibir un recordatorio seleccionando un **día y una hora**; Android programa una alarma local y muestra una notificación. Las alarmas se restauran después de reiniciar el teléfono mediante `BootReceiver`. En Android 13 o superior se debe conceder el permiso de notificaciones cuando la aplicación lo solicite.
+## Vista previa
 
-## Estructura
-
-| Ruta | Responsabilidad |
-|---|---|
-| `app/src/main/java/com/lumonotes/app/MainActivity.kt` | Actividad principal e interfaz Jetpack Compose |
-| `app/src/main/java/com/lumonotes/app/ui/NotesViewModel.kt` | Estado, filtros, búsqueda y operaciones de notas |
-| `app/src/main/java/com/lumonotes/app/data/Note.kt` | Modelo de dominio y colores |
-| `app/src/main/java/com/lumonotes/app/data/NoteDao.kt` | Consultas Room |
-| `app/src/main/java/com/lumonotes/app/data/NotesDatabase.kt` | Base de datos local |
-| `app/src/main/java/com/lumonotes/app/reminders/ReminderReceiver.kt` | Canal y recepción de notificaciones locales |
-| `app/src/main/java/com/lumonotes/app/reminders/ReminderScheduler.kt` | Programación y cancelación de alarmas |
-| `app/src/main/java/com/lumonotes/app/reminders/BootReceiver.kt` | Restauración de alarmas después de reiniciar |
-| `app/src/main/java/com/lumonotes/app/ui/ThemePreferences.kt` | Temas Negro, Blanco y Neón persistentes |
-| `app/build.gradle.kts` | Configuración Android, Kotlin, Compose y JDK 17 |
-
-## Descargar APK
-
-Puedes descargar la versión de depuración compilada para Android desde [`releases/Lumo-Notes.apk`](releases/Lumo-Notes.apk). El paquete usa el nombre oficial **Lumo Notes**, el identificador `com.lumonotes.app`, `minSdk 24` y `targetSdk 35`.
-
-## Vista previa de la interfaz
-
-La pantalla de bienvenida presenta la identidad visual de Lumo Notes antes de abrir el bloc de notas.
+### Bienvenida
 
 ![Pantalla de bienvenida de Lumo Notes](docs/screenshots/intro.png)
 
-La interfaz principal en tema Blanco muestra la búsqueda, los filtros, las tarjetas de notas y la navegación inferior.
+### Tema Blanco
 
 ![Interfaz principal de Lumo Notes en tema Blanco](docs/screenshots/notas-blanco.png)
 
-El tema Neón utiliza contraste oscuro, turquesa, magenta y amarillo para una experiencia más expresiva.
+### Tema Neón
 
 ![Interfaz de Lumo Notes en tema Neón](docs/screenshots/tema-neon.png)
 
-Los recordatorios se configuran desde el editor de una nota seleccionando el día y la hora exactos.
+### Recordatorios
 
 ![Configuración de recordatorio en Lumo Notes](docs/screenshots/recordatorio.png)
 
-## Versiones principales
+## Preguntas rápidas
 
-- Kotlin `2.0.21`.
-- Android Gradle Plugin `8.6.1`.
-- Gradle Wrapper `8.7`.
-- Compile SDK y target SDK `35`.
-- Minimum SDK `24`.
-- Java source/target compatibility `17`.
+**¿Necesito registrarme?** No. Lumo Notes funciona sin cuenta.
 
-## Nota sobre el entorno
+**¿Puedo usarla sin conexión?** Sí. Las notas y los recordatorios locales no dependen de una conexión a Internet.
 
-El proyecto contiene el Gradle Wrapper, de modo que no requiere una instalación global de Gradle. Sí requiere que `JAVA_HOME` apunte a un JDK 17 y que `ANDROID_HOME` apunte a un Android SDK que contenga las plataformas y herramientas indicadas arriba.
+**¿Cómo recupero una nota archivada?** Entra en **Archivo**, abre la nota y pulsa el botón para restaurarla.
+
+**¿Cómo cambio el aspecto de la aplicación?** Ve a **Ajustes → Temas** y selecciona Negro, Blanco o Neón.
+
+**¿Por qué no aparece una notificación?** Revisa que Lumo Notes tenga permiso para mostrar notificaciones y que el recordatorio esté programado para una fecha futura.
+
+## Enlaces
+
+- [Descargar Lumo Notes](https://github.com/HUEVOMAN77/lumo-notes/releases/download/v1.0.0/Lumo-Notes.apk)
+- [Consultar la versión v1.0.0](https://github.com/HUEVOMAN77/lumo-notes/releases/tag/v1.0.0)
+- [Abrir el repositorio](https://github.com/HUEVOMAN77/lumo-notes)
+
+---
+
+<p align="center"><strong>Lumo Notes</strong><br />Ideas privadas. Recordatorios oportunos. Más claridad.</p>
