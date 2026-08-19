@@ -19,4 +19,4 @@
 - [x] Crear experiencias distintivas: cápsulas de tiempo, estado de ánimo de la nota y modo enfoque.
 - [x] Actualizar pruebas y documentación para la expansión.
 - [x] Crear una versión recuperable y sincronizar la expansión con el repositorio de GitHub.
-- [ ] Sincronizar los cambios finales y cambiar el repositorio de GitHub a visibilidad pública por solicitud del usuario.
+- [x] Sincronizar los cambios finales y cambiar el repositorio de GitHub a visibilidad pública por solicitud del usuario.
