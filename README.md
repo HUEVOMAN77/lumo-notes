@@ -1,117 +1,77 @@
-# Lumo Notes
+# Novera Audio
 
-> **Tu espacio privado para capturar ideas, organizar momentos y recordar lo importante.**
+**Novera Audio** es un reproductor Android nativo para música local. Está diseñado para reproducir MP3 y otros formatos de audio desde el almacenamiento del teléfono, además de permitir importar archivos o carpetas completas desde una memoria USB conectada mediante OTG.
 
-[Descargar APK](https://github.com/HUEVOMAN77/lumo-notes/releases/download/v1.0.0/Lumo-Notes.apk) · [Ver la versión publicada](https://github.com/HUEVOMAN77/lumo-notes/releases/tag/v1.0.0)
+La aplicación utiliza **Kotlin al 100 %**, Jetpack Compose para la interfaz y Java 17 como objetivo de compilación. No utiliza Expo, React Native ni servicios de nube. La biblioteca importada, los favoritos y la configuración de acceso se guardan localmente en el dispositivo.
 
-Lumo Notes es un bloc de notas para Android pensado para escribir rápido, volver a tus ideas cuando lo necesites y mantener tu contenido dentro de tu dispositivo. No necesitas crear una cuenta y no tienes que enviar tus notas a ningún servicio externo.
+> **Nota sobre el nombre:** Novera Audio es una propuesta de identidad original para este proyecto. Una búsqueda pública inicial no mostró un reproductor Android con ese nombre exacto, pero esto no constituye una garantía de disponibilidad legal, registral o comercial. Antes de publicar, conviene comprobar marcas, dominios y nombres de paquete en los mercados objetivo.
 
----
+## Características
 
-## Qué puedes hacer
+| Área | Implementación |
+| --- | --- |
+| Reproducción | ExoPlayer Media3 con cola local, reproducción, pausa, anterior, siguiente, aleatorio y repetición. |
+| Biblioteca del teléfono | Escaneo de MediaStore para descubrir música local disponible. |
+| Memoria USB | Selector de documentos de Android para escoger archivos o recorrer una carpeta USB completa. |
+| Formatos | MP3, M4A, AAC, FLAC, WAV, OGG, OPUS y WMA cuando el dispositivo proporcione un decodificador compatible. |
+| Organización | Búsqueda por título, artista o álbum; favoritos y separación entre biblioteca del teléfono e importados. |
+| Diseño | Tema oscuro futurista con fondo midnight, paneles grafito, acentos cian/violeta y tarjetas de vidrio tecnológico. |
+| Privacidad | Sin cuenta, sin servidor y sin sincronización externa. |
+| Compatibilidad de código | Android Gradle Plugin 8.6.1, Kotlin 2.0.21, compileSdk 35, minSdk 24, Java/Kotlin JVM target 17. |
 
-| Función | Para qué sirve |
-|---|---|
-| **Notas rápidas** | Escribe títulos, contenido y etiquetas sin complicaciones. |
-| **Búsqueda** | Encuentra una nota por título, texto o etiqueta. |
-| **Favoritos** | Marca las ideas que quieres tener siempre a mano. |
-| **Archivo** | Aparta notas sin eliminarlas y restáuralas cuando quieras. |
-| **Colores** | Dale a cada nota una identidad visual diferente. |
-| **Imágenes** | Añade una imagen desde el selector de tu teléfono. |
-| **Recordatorios** | Elige un día y una hora para recibir una notificación. |
-| **Temas** | Cambia entre Negro, Blanco y Neón. |
-| **Privacidad** | Tus notas se guardan localmente en el dispositivo. |
+## Cómo usar una memoria USB
 
-## Descargar e instalar
+Conecta la memoria USB al teléfono mediante un adaptador OTG compatible. En Novera Audio, pulsa **Añadir** y selecciona **Importar carpeta / USB**. El selector de documentos de Android mostrará las ubicaciones disponibles; concede acceso a la carpeta que contiene la música. La aplicación recorrerá sus subcarpetas y conservará el permiso persistente que Android permita para volver a utilizar esos archivos.
 
-Descarga el archivo oficial desde **[Lumo Notes v1.0.0](https://github.com/HUEVOMAN77/lumo-notes/releases/download/v1.0.0/Lumo-Notes.apk)**.
+También puedes seleccionar archivos concretos mediante **Seleccionar archivos**. Este método resulta útil cuando la memoria contiene muchas carpetas y solo quieres añadir una selección.
 
-Después, abre el archivo APK desde la carpeta de descargas de tu teléfono y sigue las instrucciones de Android. Si el sistema solicita permiso para instalar aplicaciones descargadas fuera de la tienda, autorízalo para el navegador o el gestor de archivos que estés utilizando. Al terminar, abre **Lumo Notes** desde tu pantalla de aplicaciones.
+## Compilación local
 
-> **Compatibilidad:** Android 7.0 o superior. Para recibir notificaciones, asegúrate de permitirlas cuando Android las solicite.
+Necesitas Android Studio reciente o las herramientas de línea de comandos de Android, Android SDK Platform 35, Build Tools 35.0.0 y **JDK 17**. El repositorio incluye Gradle Wrapper, por lo que no necesitas instalar Gradle globalmente.
 
-## Primeros pasos
+En Linux o macOS, define `JAVA_HOME` apuntando a JDK 17 y ejecuta:
 
-Al abrir la aplicación verás una breve introducción de bienvenida. Pulsa **“Entrar a mis notas”** o espera a que la pantalla avance automáticamente.
+```bash
+export JAVA_HOME=/ruta/a/jdk-17
+./gradlew assembleDebug
+```
 
-Para crear tu primera nota, pulsa el botón **+**, escribe un título y añade el contenido. También puedes poner una etiqueta, elegir un color y adjuntar una imagen. Cuando termines, pulsa el botón de guardar.
+En Windows PowerShell, configura `JAVA_HOME` con la ruta del JDK 17 y ejecuta:
 
-La pantalla principal reúne tus notas y te permite buscar, filtrar y abrir cualquier contenido. Usa la barra inferior para moverte entre **Notas**, **Favoritas**, **Archivo** y **Ajustes**.
+```powershell
+.\gradlew.bat assembleDebug
+```
 
-## Crear y organizar una nota
+El APK debug se genera en:
 
-1. Pulsa **+** en la pantalla principal.
-2. Escribe un título y el contenido de la nota.
-3. Añade una etiqueta si quieres encontrarla más fácilmente.
-4. Selecciona un color para identificarla visualmente.
-5. Pulsa **Guardar**.
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
 
-Dentro de cada tarjeta puedes marcar una nota como favorita o enviarla al archivo. Para eliminarla, abre la nota y utiliza **Eliminar nota**. La aplicación solicita confirmación antes de borrar el contenido.
+Para instalarlo con un dispositivo conectado y autorizado por ADB:
 
-## Programar un recordatorio
+```bash
+./gradlew installDebug
+```
 
-Los recordatorios son locales y funcionan directamente en tu teléfono.
+## Estructura principal
 
-1. Abre una nota existente o crea una nueva.
-2. Pulsa **“Elegir fecha y hora del recordatorio”**.
-3. Selecciona el día en el calendario.
-4. Selecciona la hora exacta.
-5. Guarda la nota.
+| Ruta | Propósito |
+| --- | --- |
+| `app/src/main/java/com/novera/audio/MainActivity.kt` | UI Compose, modelo de pista, ViewModel, escaneo, importación y controles Media3. |
+| `app/src/main/AndroidManifest.xml` | Permisos de audio y actividad de lanzamiento. |
+| `app/src/main/res/drawable/novera_audio_icon.png` | Ícono visual original de Novera Audio. |
+| `app/build.gradle.kts` | Dependencias y configuración de Java 17/Kotlin. |
+| `releases/Novera-Audio-debug.apk` | APK debug compilado localmente para pruebas. |
 
-Android mostrará una notificación en el momento indicado. Si quieres cancelar el aviso, vuelve a abrir la nota y pulsa **“Quitar recordatorio”**. Para que el aviso funcione correctamente, permite las notificaciones de Lumo Notes cuando el sistema las solicite.
+## Permisos
 
-## Elegir un tema
+En Android 13 o superior se solicita `READ_MEDIA_AUDIO`. En versiones anteriores se utiliza `READ_EXTERNAL_STORAGE`. Para memorias USB y ubicaciones seleccionadas manualmente se utiliza el Storage Access Framework de Android, que muestra el diálogo del sistema y evita solicitar acceso indiscriminado a todo el almacenamiento.
 
-Abre **Ajustes** y entra en la sección **Temas**. Puedes elegir entre:
+## Estado del prototipo
 
-- **Blanco**, claro y limpio para el uso diario.
-- **Negro**, sobrio y cómodo para ambientes oscuros.
-- **Neón**, expresivo, colorido y de alto contraste.
+La versión entregada está orientada a pruebas locales y ya compila como APK debug. El siguiente salto de producto sería añadir una sesión Media3 persistente para controles completos de pantalla bloqueada, edición de metadatos, playlists avanzadas, carátulas y un ecualizador dedicado.
 
-La selección queda guardada para que la aplicación conserve tu estilo la próxima vez que la abras.
+## Licencia
 
-## Privacidad
-
-> Lumo Notes está diseñada para guardar tus notas en el dispositivo. No necesitas una cuenta para utilizarla y el contenido de tus notas no se envía a un servidor.
-
-Las imágenes adjuntas también permanecen dentro del espacio privado de la aplicación. El permiso de notificaciones solo se utiliza para mostrar los recordatorios que tú programes.
-
-## Vista previa
-
-### Bienvenida
-
-![Pantalla de bienvenida de Lumo Notes](docs/screenshots/intro.png)
-
-### Tema Blanco
-
-![Interfaz principal de Lumo Notes en tema Blanco](docs/screenshots/notas-blanco.png)
-
-### Tema Neón
-
-![Interfaz de Lumo Notes en tema Neón](docs/screenshots/tema-neon.png)
-
-### Recordatorios
-
-![Configuración de recordatorio en Lumo Notes](docs/screenshots/recordatorio.png)
-
-## Preguntas rápidas
-
-**¿Necesito registrarme?** No. Lumo Notes funciona sin cuenta.
-
-**¿Puedo usarla sin conexión?** Sí. Las notas y los recordatorios locales no dependen de una conexión a Internet.
-
-**¿Cómo recupero una nota archivada?** Entra en **Archivo**, abre la nota y pulsa el botón para restaurarla.
-
-**¿Cómo cambio el aspecto de la aplicación?** Ve a **Ajustes → Temas** y selecciona Negro, Blanco o Neón.
-
-**¿Por qué no aparece una notificación?** Revisa que Lumo Notes tenga permiso para mostrar notificaciones y que el recordatorio esté programado para una fecha futura.
-
-## Enlaces
-
-- [Descargar Lumo Notes](https://github.com/HUEVOMAN77/lumo-notes/releases/download/v1.0.0/Lumo-Notes.apk)
-- [Consultar la versión v1.0.0](https://github.com/HUEVOMAN77/lumo-notes/releases/tag/v1.0.0)
-- [Abrir el repositorio](https://github.com/HUEVOMAN77/lumo-notes)
-
----
-
-<p align="center"><strong>Lumo Notes</strong><br />Ideas privadas. Recordatorios oportunos. Más claridad.</p>
+Este repositorio no añade una licencia de distribución nueva. Define la licencia que prefieras antes de publicar el proyecto o el APK en una tienda.

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LumoNotes"
+rootProject.name = "NoveraAudio"
 include(":app")

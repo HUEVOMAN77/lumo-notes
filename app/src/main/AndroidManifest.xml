@@ -1,37 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_lumo_leaf"
-        android:label="Lumo Notes"
-        android:roundIcon="@drawable/ic_lumo_leaf"
+        android:icon="@drawable/novera_audio_icon"
+        android:label="Novera Audio"
+        android:roundIcon="@drawable/novera_audio_icon"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LumoNotes">
+        android:theme="@style/Theme.NoveraAudio">
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:screenOrientation="portrait">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <receiver
-            android:name=".reminders.ReminderReceiver"
-            android:exported="false" />
-        <receiver
-            android:name=".reminders.BootReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
     </application>
 </manifest>
