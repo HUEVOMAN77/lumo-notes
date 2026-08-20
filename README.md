@@ -16,6 +16,8 @@ La aplicación utiliza **Kotlin al 100 %**, Jetpack Compose para la interfaz y J
 | Formatos | MP3, M4A, AAC, FLAC, WAV, OGG, OPUS y WMA cuando el dispositivo proporcione un decodificador compatible. |
 | Organización | Búsqueda por título, artista o álbum; favoritos y separación entre biblioteca del teléfono e importados. |
 | Diseño | Tema oscuro futurista con fondo midnight, paneles grafito, acentos cian/violeta y tarjetas de vidrio tecnológico. |
+| Animaciones | Intro animado al iniciar, entrada/salida del mini-reproductor, expansión del reproductor, cambios de color y transiciones de contenido. |
+| Navegación | Biblioteca implementada como una única `LazyColumn` real, con scroll hasta el final y navegación inferior independiente. |
 | Privacidad | Sin cuenta, sin servidor y sin sincronización externa. |
 | Compatibilidad de código | Android Gradle Plugin 8.6.1, Kotlin 2.0.21, compileSdk 35, minSdk 24, Java/Kotlin JVM target 17. |
 
@@ -70,7 +72,7 @@ En Android 13 o superior se solicita `READ_MEDIA_AUDIO`. En versiones anteriores
 
 ## Estado del prototipo
 
-La versión entregada está orientada a pruebas locales y ya compila como APK debug. El siguiente salto de producto sería añadir una sesión Media3 persistente para controles completos de pantalla bloqueada, edición de metadatos, playlists avanzadas, carátulas y un ecualizador dedicado.
+La versión entregada está orientada a pruebas locales y compila como APK debug. La interfaz incluye un intro animado, scroll real de toda la biblioteca, mini-reproductor persistente sobre la navegación inferior, reproductor expandible con seek, aleatorio y repetición, además de transiciones Compose. El siguiente salto de producto sería añadir una sesión Media3 persistente para controles completos de pantalla bloqueada, edición de metadatos, playlists avanzadas, carátulas y un ecualizador dedicado.
 
 ## Licencia
 

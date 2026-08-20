@@ -10,6 +10,15 @@ import android.os.Build
 import android.os.Bundle
 import android.content.pm.PackageManager
 import android.provider.MediaStore
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -40,6 +49,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Close
@@ -95,6 +105,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -401,14 +412,42 @@ private fun isAudioFile(name: String?, mime: String?): Boolean {
     return mime?.startsWith("audio/") == true || extension in setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma")
 }
 
+
+@Composable
+private fun IntroScreen(onFinished: () -> Unit) {
+    var started by remember { mutableStateOf(false) }
+    val logoScale by animateFloatAsState(if (started) 1f else 0.72f, animationSpec = tween(850), label = "introLogoScale")
+    val logoAlpha by animateFloatAsState(if (started) 1f else 0f, animationSpec = tween(650), label = "introLogoAlpha")
+    LaunchedEffect(Unit) {
+        started = true
+        delay(2300)
+        onFinished()
+    }
+    Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Midnight, Color(0xFF101B35), Color(0xFF1A1232)))), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.graphicsLayer { alpha = logoAlpha; scaleX = logoScale; scaleY = logoScale }) {
+            Box(modifier = Modifier.size(128.dp).clip(RoundedCornerShape(38.dp)).background(Brush.linearGradient(listOf(Cyan, Violet))).shadow(18.dp, RoundedCornerShape(38.dp)), contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = Midnight, modifier = Modifier.size(70.dp))
+            }
+            Spacer(Modifier.height(28.dp))
+            Text("NOVERA", style = MaterialTheme.typography.displaySmall, color = Color.White, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
+            Text("AUDIO", style = MaterialTheme.typography.titleMedium, color = Cyan, letterSpacing = 6.sp)
+            Spacer(Modifier.height(24.dp))
+            AnimatedVisibility(visible = started, enter = fadeIn(tween(650))) {
+                Text("LOCAL / UNBOUND", style = MaterialTheme.typography.labelMedium, color = SoftText, letterSpacing = 2.4.sp)
+            }
+        }
+    }
+}
+
 @Composable
 private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     val context = LocalContext.current
     val state by vm.state.collectAsState()
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+    var showIntro by remember { mutableStateOf(true) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.refreshLibrary() }
-    LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, audioPermission) != PackageManager.PERMISSION_GRANTED) {
+    LaunchedEffect(showIntro) {
+        if (!showIntro && ContextCompat.checkSelfPermission(context, audioPermission) != PackageManager.PERMISSION_GRANTED) {
             permissionLauncher.launch(audioPermission)
         }
     }
@@ -430,6 +469,9 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
             vm.importFolder(uri)
         }
     }
+    val currentTrack = remember(state.tracks, state.importedTracks, state.currentId) {
+        (state.tracks + state.importedTracks).firstOrNull { it.id == state.currentId }
+    }
     val filtered = remember(state.tracks, state.importedTracks, state.query, selectedTab) {
         val source = when (selectedTab) {
             1 -> state.importedTracks
@@ -440,46 +482,68 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
         }
     }
 
-    MaterialTheme(colorScheme = noveraColors()) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Midnight) {
-            Scaffold(
-                contentWindowInsets = WindowInsets.safeDrawing,
-                containerColor = Midnight,
-                topBar = {
-                    NoveraTopBar(
-                        onRefresh = vm::refreshLibrary,
-                        onImport = { showImport = true },
-                        onSettings = { selectedTab = 2 }
-                    )
-                },
-                bottomBar = {
-                    NavigationBar(
-                        modifier = Modifier.navigationBarsPadding(),
-                        containerColor = DeepPanel,
-                        tonalElevation = 0.dp
-                    ) {
-                        NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Default.LibraryMusic, null) }, label = { Text("Biblioteca") })
-                        NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Default.Usb, null) }, label = { Text("Importados") })
-                        NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Ajustes") })
+        MaterialTheme(colorScheme = noveraColors()) {
+        if (showIntro) {
+            IntroScreen(onFinished = { showIntro = false })
+        } else {
+            Surface(modifier = Modifier.fillMaxSize(), color = Midnight) {
+                Scaffold(
+                    contentWindowInsets = WindowInsets.safeDrawing,
+                    containerColor = Midnight,
+                    topBar = {
+                        NoveraTopBar(
+                            onRefresh = vm::refreshLibrary,
+                            onImport = { showImport = true },
+                            onSettings = { selectedTab = 2 }
+                        )
+                    },
+                    bottomBar = {
+                        Column(modifier = Modifier.background(DeepPanel)) {
+                            AnimatedVisibility(
+                                visible = currentTrack != null,
+                                enter = fadeIn(tween(260)) + scaleIn(tween(260)),
+                                exit = fadeOut(tween(180)) + scaleOut(tween(180))
+                            ) {
+                                MiniPlayerBar(
+                                    track = currentTrack,
+                                    state = state,
+                                    onPlayPause = vm::togglePlay,
+                                    onNext = vm::next,
+                                    onOpen = { selectedTab = 0 }
+                                )
+                            }
+                            NavigationBar(
+                                modifier = Modifier.navigationBarsPadding(),
+                                containerColor = DeepPanel,
+                                tonalElevation = 0.dp
+                            ) {
+                            NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Default.LibraryMusic, null) }, label = { Text("Biblioteca") })
+                            NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Default.Usb, null) }, label = { Text("Importados") })
+                                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Ajustes") })
+                            }
+                        }
                     }
-                }
-            ) { padding ->
-                when (selectedTab) {
-                    2 -> SettingsScreen(onBack = { selectedTab = 0 })
-                    else -> LibraryScreen(
-                        padding = padding,
-                        tracks = filtered,
-                        state = state,
-                        isFavorite = vm::isFavorite,
-                        onQueryChange = vm::setQuery,
-                        onPlay = vm::play,
-                        onFavorite = vm::toggleFavorite,
-                        onOpenImport = { showImport = true },
-                        onRefresh = vm::refreshLibrary,
-                        onPlayPause = vm::togglePlay,
-                        onPrevious = vm::previous,
-                        onNext = vm::next
-                    )
+                ) { padding ->
+                    when (selectedTab) {
+                        2 -> SettingsScreen(onBack = { selectedTab = 0 })
+                        else -> LibraryScreen(
+                            padding = padding,
+                            tracks = filtered,
+                            state = state,
+                            isFavorite = vm::isFavorite,
+                            onQueryChange = vm::setQuery,
+                            onPlay = vm::play,
+                            onFavorite = vm::toggleFavorite,
+                            onOpenImport = { showImport = true },
+                            onRefresh = vm::refreshLibrary,
+                            onPlayPause = vm::togglePlay,
+                            onPrevious = vm::previous,
+                            onNext = vm::next,
+                            onSeek = vm::seekTo,
+                            onShuffle = vm::toggleShuffle,
+                            onRepeat = vm::cycleRepeat
+                        )
+                    }
                 }
             }
         }
@@ -508,7 +572,7 @@ private fun NoveraTopBar(onRefresh: () -> Unit, onImport: () -> Unit, onSettings
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Cyan, Violet))), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.QueueMusic, null, tint = Midnight, modifier = Modifier.size(22.dp))
+                    Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = Midnight, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
@@ -527,6 +591,39 @@ private fun NoveraTopBar(onRefresh: () -> Unit, onImport: () -> Unit, onSettings
 }
 
 @Composable
+private fun MiniPlayerBar(
+    track: Track?,
+    state: PlayerState,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onOpen: () -> Unit
+) {
+    val activeTrack = track ?: return
+    val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
+    Surface(
+        modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(250)).clickable(onClick = onOpen),
+        color = Color(0xFF121E32),
+        tonalElevation = 0.dp
+    ) {
+        Column {
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp), color = Cyan, trackColor = Color.Transparent)
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Cyan, Violet))), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.AudioFile, null, tint = Midnight, modifier = Modifier.size(23.dp))
+                }
+                Spacer(Modifier.width(11.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(activeTrack.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(activeTrack.artist, color = SoftText, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                IconButton(onClick = onPlayPause) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Reproducir o pausar", tint = Cyan) }
+                IconButton(onClick = onNext) { Icon(Icons.Default.SkipNext, "Siguiente", tint = SoftText) }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LibraryScreen(
     padding: PaddingValues,
     tracks: List<Track>,
@@ -539,88 +636,142 @@ private fun LibraryScreen(
     onRefresh: () -> Unit,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onShuffle: () -> Unit,
+    onRepeat: () -> Unit
 ) {
     val listState = rememberLazyListState()
-    Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp)) {
-        Spacer(Modifier.height(8.dp))
-        NowPlayingCard(state = state, onPlayPause = onPlayPause, onPrevious = onPrevious, onNext = onNext)
-        Spacer(Modifier.height(18.dp))
-        OutlinedTextField(
-            value = state.query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            leadingIcon = { Icon(Icons.Default.Search, null, tint = Cyan) },
-            trailingIcon = { if (state.query.isNotBlank()) IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Default.Close, "Limpiar búsqueda") } },
-            placeholder = { Text("Buscar por título, artista o álbum", color = MutedText) },
-            shape = RoundedCornerShape(18.dp),
-            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Cyan,
-                unfocusedBorderColor = Color(0xFF26364D),
-                focusedContainerColor = DeepPanel,
-                unfocusedContainerColor = DeepPanel,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp),
+        state = listState,
+        contentPadding = PaddingValues(top = 8.dp, bottom = 170.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item(key = "now-playing") {
+            NowPlayingCard(
+                state = state,
+                onPlayPause = onPlayPause,
+                onPrevious = onPrevious,
+                onNext = onNext,
+                onSeek = onSeek,
+                onShuffle = onShuffle,
+                onRepeat = onRepeat
             )
-        )
-        Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(if (state.isScanning) "Escaneando biblioteca…" else "Tu biblioteca", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("${tracks.size} ${if (tracks.size == 1) "pista disponible" else "pistas disponibles"}", style = MaterialTheme.typography.bodySmall, color = SoftText)
-            }
-            OutlinedButton(onClick = onOpenImport, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) {
-                Icon(Icons.Default.Usb, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Añadir")
+        }
+        item(key = "search") {
+            OutlinedTextField(
+                value = state.query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Search, null, tint = Cyan) },
+                trailingIcon = { if (state.query.isNotBlank()) IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Default.Close, "Limpiar búsqueda") } },
+                placeholder = { Text("Buscar por título, artista o álbum", color = MutedText) },
+                shape = RoundedCornerShape(18.dp),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Cyan,
+                    unfocusedBorderColor = Color(0xFF26364D),
+                    focusedContainerColor = DeepPanel,
+                    unfocusedContainerColor = DeepPanel,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                )
+            )
+        }
+        item(key = "library-header") {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(if (state.isScanning) "Escaneando biblioteca…" else "Tu biblioteca", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("${tracks.size} ${if (tracks.size == 1) "pista disponible" else "pistas disponibles"}", style = MaterialTheme.typography.bodySmall, color = SoftText)
+                }
+                OutlinedButton(onClick = onOpenImport, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) {
+                    Icon(Icons.Default.Usb, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Añadir")
+                }
             }
         }
-        Spacer(Modifier.height(10.dp))
-        if (state.isScanning) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Cyan, trackColor = DeepPanel)
+        if (state.isScanning) {
+            item(key = "scan-progress") {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Cyan, trackColor = DeepPanel)
+            }
+        }
         if (tracks.isEmpty() && !state.isScanning) {
-            EmptyLibrary(onImport = onOpenImport, onRefresh = onRefresh)
+            item(key = "empty-library") {
+                EmptyLibrary(onImport = onOpenImport, onRefresh = onRefresh)
+            }
         } else {
-            LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 138.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(tracks, key = { it.id }) { track ->
-                    TrackRow(track = track, active = state.currentId == track.id, favorite = isFavorite(track), onPlay = onPlay, onFavorite = onFavorite)
-                }
+            items(tracks, key = { it.id }) { track ->
+                TrackRow(track = track, active = state.currentId == track.id, favorite = isFavorite(track), onPlay = onPlay, onFavorite = onFavorite)
             }
         }
     }
 }
 
 @Composable
-private fun NowPlayingCard(state: PlayerState, onPlayPause: () -> Unit, onPrevious: () -> Unit, onNext: () -> Unit) {
+private fun NowPlayingCard(
+    state: PlayerState,
+    onPlayPause: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onShuffle: () -> Unit,
+    onRepeat: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
     val current = state.tracks.plus(state.importedTracks).firstOrNull { it.id == state.currentId }
+    val repeatLabel = when (state.repeatMode) {
+        Player.REPEAT_MODE_ONE -> "Repetir pista"
+        Player.REPEAT_MODE_ALL -> "Repetir cola"
+        else -> "Repetición desactivada"
+    }
     Card(
-        modifier = Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(28.dp)),
+        modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(380)).shadow(12.dp, RoundedCornerShape(28.dp)),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Box(modifier = Modifier.background(Brush.linearGradient(listOf(Color(0xFF1A2D49), Color(0xFF221B42)))).padding(20.dp)) {
+        Box(modifier = Modifier.background(Brush.linearGradient(listOf(Color(0xFF1A2D49), Color(0xFF221B42)))).padding(18.dp)) {
             Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(78.dp).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(Cyan.copy(alpha = 0.9f), Violet.copy(alpha = 0.9f)))), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.AudioFile, null, tint = Midnight, modifier = Modifier.size(38.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
+                ) {
+                    Box(modifier = Modifier.size(if (expanded) 86.dp else 66.dp).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(Cyan.copy(alpha = 0.9f), Violet.copy(alpha = 0.9f)))), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.AudioFile, null, tint = Midnight, modifier = Modifier.size(if (expanded) 38.dp else 30.dp))
                     }
-                    Spacer(Modifier.width(16.dp))
+                    Spacer(Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("AHORA SUENA", style = MaterialTheme.typography.labelSmall, color = Cyan, letterSpacing = 1.7.sp)
                         Spacer(Modifier.height(3.dp))
-                        Text(current?.title ?: "Selecciona una pista", style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(current?.title ?: "Selecciona una pista", style = if (expanded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(current?.artist ?: "Tu música, sin límites", color = SoftText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    Text(if (expanded) "⌃" else "⌄", color = SoftText, fontSize = 22.sp)
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
                 val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = Cyan, trackColor = Color.White.copy(alpha = 0.12f))
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(formatTime(state.positionMs), style = MaterialTheme.typography.labelSmall, color = SoftText)
                     Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelSmall, color = SoftText)
+                }
+                AnimatedVisibility(visible = expanded, enter = fadeIn(tween(250)) + scaleIn(tween(250)), exit = fadeOut(tween(180)) + scaleOut(tween(180))) {
+                    Column {
+                        Slider(
+                            value = progress,
+                            onValueChange = { onSeek((it * state.durationMs).toLong()) },
+                            valueRange = 0f..1f,
+                            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan, inactiveTrackColor = Color.White.copy(alpha = 0.15f))
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            TextButton(onClick = onShuffle) { Icon(Icons.Default.Shuffle, null, tint = if (state.isShuffle) Cyan else SoftText); Spacer(Modifier.width(4.dp)); Text(if (state.isShuffle) "Aleatorio" else "Orden", color = if (state.isShuffle) Cyan else SoftText) }
+                            TextButton(onClick = onRepeat) { Icon(Icons.Default.Repeat, repeatLabel, tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) Violet else SoftText); Spacer(Modifier.width(4.dp)); Text(repeatLabel, color = if (state.repeatMode != Player.REPEAT_MODE_OFF) Violet else SoftText) }
+                        }
+                    }
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onPrevious) { Icon(Icons.Default.SkipPrevious, "Anterior", tint = Color.White, modifier = Modifier.size(30.dp)) }
                     Spacer(Modifier.width(6.dp))
-                    Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Cyan, Violet))).clickable(onClick = onPlayPause), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(54.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Cyan, Violet))).clickable(onClick = onPlayPause), contentAlignment = Alignment.Center) {
                         Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Reproducir", tint = Midnight, modifier = Modifier.size(30.dp))
                     }
                     Spacer(Modifier.width(6.dp))
@@ -633,10 +784,11 @@ private fun NowPlayingCard(state: PlayerState, onPlayPause: () -> Unit, onPrevio
 
 @Composable
 private fun TrackRow(track: Track, active: Boolean, favorite: Boolean, onPlay: (Track) -> Unit, onFavorite: (Track) -> Unit) {
+    val cardColor by animateColorAsState(if (active) Color(0xFF182B42) else DeepPanel, animationSpec = tween(260), label = "trackCardColor")
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onPlay(track) },
+        modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(260)).clickable { onPlay(track) },
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = if (active) Color(0xFF182B42) else DeepPanel)
+        colors = CardDefaults.cardColors(containerColor = cardColor)
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(52.dp).clip(RoundedCornerShape(15.dp)).background(if (active) Brush.linearGradient(listOf(Cyan, Violet)) else Brush.linearGradient(listOf(RaisedPanel, Color(0xFF24334C)))), contentAlignment = Alignment.Center) {
