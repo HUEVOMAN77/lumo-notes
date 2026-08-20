@@ -16,7 +16,11 @@ import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,9 +32,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -60,6 +66,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -148,6 +155,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.max
@@ -201,6 +209,9 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     private val player: ExoPlayer = PlaybackEngine.player(context)
     private val audioEffects = AudioEffectsController(context, player)
     private val playlistStore = PlaylistStore(context)
+    private val advancedStore = AdvancedStore(context)
+    private val _advancedState = MutableStateFlow(advancedStore.load())
+    val advancedState: StateFlow<AdvancedState> = _advancedState.asStateFlow()
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
     val audioState: StateFlow<AudioFxState> = audioEffects.state
@@ -215,6 +226,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val id = mediaItem?.mediaId
                 _state.update { it.copy(currentId = id, durationMs = player.duration.takeIf { value -> value > 0 } ?: 0L) }
+                _advancedState.update { it.copy(currentLyrics = it.lrcByTrack[id].orEmpty()) }
                 syncWidget()
             }
 
@@ -230,9 +242,12 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
         refreshLibrary()
         viewModelScope.launch {
             while (true) {
+                val position = player.currentPosition.coerceAtLeast(0L)
+                val advanced = _advancedState.value
+                if (advanced.loopEnabled && advanced.loopA != null && advanced.loopB != null && position >= advanced.loopB) player.seekTo(advanced.loopA)
                 _state.update {
                     it.copy(
-                        positionMs = player.currentPosition.coerceAtLeast(0L),
+                        positionMs = position,
                         durationMs = player.duration.takeIf { duration -> duration > 0 } ?: it.durationMs
                     )
                 }
@@ -290,6 +305,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     }
 
     fun seekTo(positionMs: Long) = player.seekTo(positionMs.coerceAtLeast(0L))
+    fun seekToBookmark(positionMs: Long) = player.seekTo(positionMs.coerceAtLeast(0L))
 
     fun next() = player.seekToNextMediaItem()
 
@@ -391,6 +407,98 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     fun toggleLoudness(enabled: Boolean) = audioEffects.toggleLoudness(enabled)
     fun toggleSpatial(enabled: Boolean) = audioEffects.toggleSpatial(enabled)
     fun dismissAudioMessage() = audioEffects.clearMessage()
+
+    fun createSmartPlaylist(name: String, mode: SmartRuleMode, artist: String = "") {
+        val item = SmartPlaylist(UUID.randomUUID().toString(), name.trim().ifBlank { "Smart Playlist" }, mode, artist.trim())
+        val updated = _advancedState.value.smartPlaylists + item
+        saveAdvanced(_advancedState.value.copy(smartPlaylists = updated))
+        _state.update { it.copy(notice = "Playlist inteligente creada") }
+    }
+
+    fun deleteSmartPlaylist(id: String) = saveAdvanced(_advancedState.value.copy(smartPlaylists = _advancedState.value.smartPlaylists.filterNot { it.id == id }))
+
+    fun playSmartPlaylist(item: SmartPlaylist) {
+        val library = allTracks()
+        val favorites = prefs.getStringSet("favorites", emptySet()).orEmpty()
+        val queue = when (item.mode) {
+            SmartRuleMode.FAVORITES -> library.filter { it.id in favorites }
+            SmartRuleMode.LONGEST -> library.sortedByDescending { it.durationMs }
+            SmartRuleMode.ARTIST -> library.filter { it.artist.contains(item.artistQuery, ignoreCase = true) }
+        }
+        if (queue.isEmpty()) _state.update { it.copy(notice = "No hay canciones que coincidan con esta regla") } else playQueue(queue)
+    }
+
+    fun addBookmark(title: String, positionMs: Long) {
+        val trackId = _state.value.currentId ?: return
+        val entry = Bookmark(UUID.randomUUID().toString(), trackId, title.trim().ifBlank { "Marcador" }, positionMs)
+        val updated = _advancedState.value.bookmarks.toMutableMap()
+        updated[trackId] = updated[trackId].orEmpty() + entry
+        saveAdvanced(_advancedState.value.copy(bookmarks = updated))
+    }
+
+    fun removeBookmark(trackId: String, bookmarkId: String) {
+        val updated = _advancedState.value.bookmarks.toMutableMap()
+        updated[trackId] = updated[trackId].orEmpty().filterNot { it.id == bookmarkId }
+        saveAdvanced(_advancedState.value.copy(bookmarks = updated))
+    }
+
+    fun setLoopA(positionMs: Long) = saveAdvanced(_advancedState.value.copy(loopA = positionMs))
+    fun setLoopB(positionMs: Long) = saveAdvanced(_advancedState.value.copy(loopB = positionMs))
+    fun toggleLoop(enabled: Boolean) = saveAdvanced(_advancedState.value.copy(loopEnabled = enabled))
+    fun clearLoop() = saveAdvanced(_advancedState.value.copy(loopA = null, loopB = null, loopEnabled = false))
+
+    fun importLyrics(uri: Uri, trackId: String) {
+        viewModelScope.launch {
+            val lines = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { LrcParser.parse(it.readText()) }.orEmpty() }
+            val updated = _advancedState.value.lrcByTrack.toMutableMap()
+            updated[trackId] = lines
+            saveAdvanced(_advancedState.value.copy(lrcByTrack = updated, currentLyrics = lines))
+            _state.update { it.copy(notice = if (lines.isEmpty()) "No se encontraron líneas LRC" else "Letras importadas") }
+        }
+    }
+
+    fun saveDeviceProfile(profile: DeviceProfile) {
+        val updated = (_advancedState.value.deviceProfiles.filterNot { it.key == profile.key } + profile)
+        saveAdvanced(_advancedState.value.copy(deviceProfiles = updated))
+    }
+
+    fun saveCurrentDeviceProfile(name: String) {
+        val fx = audioEffects.state.value
+        saveDeviceProfile(DeviceProfile("local-output", name.trim().ifBlank { "Mi salida de audio" }, fx.bands.associate { it.index.toInt() to it.levelMb.toInt() }, fx.bassBoostEnabled, fx.loudnessEnabled, fx.spatialEnabled))
+    }
+
+    fun applyDeviceProfile(profile: DeviceProfile) {
+        profile.bandLevels.forEach { (index, level) -> audioEffects.setBandLevel(index.toShort(), level.toShort()) }
+        audioEffects.toggleBassBoost(profile.bassBoost)
+        audioEffects.toggleLoudness(profile.loudness)
+        audioEffects.toggleSpatial(profile.spatial)
+        _state.update { it.copy(notice = "Perfil ${profile.name} aplicado") }
+    }
+
+    fun exportBackup(uri: Uri, themeOrdinal: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val json = advancedStore.backup(_state.value.playlists, _advancedState.value, prefs.getStringSet("favorites", emptySet()).orEmpty(), themeOrdinal)
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json.toString(2)) }
+            _state.update { it.copy(notice = "Copia de seguridad exportada") }
+        }
+    }
+
+    fun restoreBackup(uri: Uri, onTheme: (Int) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { JSONObject(it.readText()) } ?: return@launch
+            val backup = advancedStore.restore(json)
+            playlistStore.save(backup.playlists)
+            prefs.edit().putStringSet("favorites", backup.favorites).apply()
+            saveAdvanced(backup.advanced)
+            _state.update { it.copy(playlists = backup.playlists, notice = "Copia restaurada") }
+            withContext(Dispatchers.Main) { onTheme(backup.themeOrdinal) }
+        }
+    }
+
+    private fun saveAdvanced(state: AdvancedState) {
+        advancedStore.save(state)
+        _advancedState.value = state
+    }
 
     private fun syncWidget() {
         val track = allTracks().firstOrNull { it.id == player.currentMediaItem?.mediaId }
@@ -537,6 +645,7 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     val context = LocalContext.current
     val state by vm.state.collectAsState()
     val audioState by vm.audioState.collectAsState()
+    val advancedState by vm.advancedState.collectAsState()
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     val requestedPermissions = remember(audioPermission) {
         buildList {
@@ -564,6 +673,20 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
             } catch (_: Exception) { }
         }
         vm.importUris(uris)
+    }
+    val lrcPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val trackId = state.currentId
+        if (uri != null && trackId != null) vm.importLyrics(uri, trackId)
+    }
+    val backupExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) vm.exportBackup(uri, activeTheme.ordinal)
+    }
+    val backupImportPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.restoreBackup(uri) { ordinal ->
+            val theme = NoveraTheme.values().getOrElse(ordinal) { NoveraTheme.AURORA }
+            activeTheme = theme
+            themeStore.save(theme)
+        }
     }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -654,6 +777,24 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                             onBassBoost = vm::toggleBassBoost,
                             onLoudness = vm::toggleLoudness,
                             onSpatial = vm::toggleSpatial,
+                            advancedState = advancedState,
+                            currentTrack = currentTrack,
+                            positionMs = state.positionMs,
+                            onCreateSmartPlaylist = vm::createSmartPlaylist,
+                            onPlaySmartPlaylist = vm::playSmartPlaylist,
+                            onDeleteSmartPlaylist = vm::deleteSmartPlaylist,
+                            onAddBookmark = vm::addBookmark,
+                            onRemoveBookmark = vm::removeBookmark,
+                            onJumpBookmark = vm::seekToBookmark,
+                            onSetLoopA = vm::setLoopA,
+                            onSetLoopB = vm::setLoopB,
+                            onToggleLoop = vm::toggleLoop,
+                            onClearLoop = vm::clearLoop,
+                            onImportLyrics = { lrcPicker.launch(arrayOf("text/*", "application/octet-stream")) },
+                            onExportBackup = { backupExportPicker.launch("novera-backup.json") },
+                            onImportBackup = { backupImportPicker.launch(arrayOf("application/json", "text/*")) },
+                            onSaveDeviceProfile = vm::saveCurrentDeviceProfile,
+                            onApplyDeviceProfile = vm::applyDeviceProfile,
                             onBack = { selectedTab = 0 }
                         )
                         else -> LibraryScreen(
@@ -1184,7 +1325,7 @@ private fun PlaylistPickerDialog(track: Track, playlists: List<Playlist>, onDism
 }
 
 private enum class SettingsPage {
-    ROOT, THEMES, EQUALIZER, NOISE_REDUCTION, BLUETOOTH, ENHANCEMENTS, STORAGE, ABOUT
+    ROOT, THEMES, EQUALIZER, NOISE_REDUCTION, BLUETOOTH, ENHANCEMENTS, STUDIO, STORAGE, ABOUT
 }
 
 @Composable
@@ -1198,6 +1339,24 @@ private fun SettingsScreen(
     onBassBoost: (Boolean) -> Unit,
     onLoudness: (Boolean) -> Unit,
     onSpatial: (Boolean) -> Unit,
+    advancedState: AdvancedState,
+    currentTrack: Track?,
+    positionMs: Long,
+    onCreateSmartPlaylist: (String, SmartRuleMode, String) -> Unit,
+    onPlaySmartPlaylist: (SmartPlaylist) -> Unit,
+    onDeleteSmartPlaylist: (String) -> Unit,
+    onAddBookmark: (String, Long) -> Unit,
+    onRemoveBookmark: (String, String) -> Unit,
+    onJumpBookmark: (Long) -> Unit,
+    onSetLoopA: (Long) -> Unit,
+    onSetLoopB: (Long) -> Unit,
+    onToggleLoop: (Boolean) -> Unit,
+    onClearLoop: () -> Unit,
+    onImportLyrics: () -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
+    onSaveDeviceProfile: (String) -> Unit,
+    onApplyDeviceProfile: (DeviceProfile) -> Unit,
     onBack: () -> Unit
 ) {
     var page by remember { mutableStateOf(SettingsPage.ROOT) }
@@ -1231,6 +1390,28 @@ private fun SettingsScreen(
         SettingsPage.ENHANCEMENTS -> SettingsDetail(title = "Mejoras de sonido", subtitle = "Bajos, volumen percibido y espacialidad", onBack = goBack) {
             EnhancementsPanel(state = audioState, onBassBoost = onBassBoost, onLoudness = onLoudness, onSpatial = onSpatial)
         }
+        SettingsPage.STUDIO -> SettingsDetail(title = "Novera Studio", subtitle = "Herramientas para escuchar a tu manera", onBack = goBack) {
+            NoveraStudioPanel(
+                advancedState = advancedState,
+                currentTrack = currentTrack,
+                positionMs = positionMs,
+                onCreateSmartPlaylist = onCreateSmartPlaylist,
+                onPlaySmartPlaylist = onPlaySmartPlaylist,
+                onDeleteSmartPlaylist = onDeleteSmartPlaylist,
+                onAddBookmark = onAddBookmark,
+                onRemoveBookmark = onRemoveBookmark,
+                onJumpBookmark = onJumpBookmark,
+                onSetLoopA = onSetLoopA,
+                onSetLoopB = onSetLoopB,
+                onToggleLoop = onToggleLoop,
+                onClearLoop = onClearLoop,
+                onImportLyrics = onImportLyrics,
+                onExportBackup = onExportBackup,
+                onImportBackup = onImportBackup,
+                onSaveDeviceProfile = onSaveDeviceProfile,
+                onApplyDeviceProfile = onApplyDeviceProfile
+            )
+        }
         SettingsPage.STORAGE -> SettingsDetail(title = "Biblioteca y USB", subtitle = "Fuentes locales y almacenamiento externo", onBack = goBack) {
             StorageSettingsPanel()
         }
@@ -1262,6 +1443,7 @@ private fun SettingsHome(
         SettingsOptionRow("Ecualización", if (audioState.equalizerAvailable) "Perfiles y bandas manuales disponibles" else "Esperando una sesión de reproducción", Icons.Default.Tune, Cyan) { onOpen(SettingsPage.EQUALIZER) }
         SettingsOptionRow("Eliminar ruido", if (audioState.noiseReductionAvailable) "Control experimental disponible" else "No disponible en esta sesión", Icons.Default.GraphicEq, Violet) { onOpen(SettingsPage.NOISE_REDUCTION) }
         SettingsOptionRow("Mejoras de sonido", "Bajos, volumen percibido y audio espacial", Icons.Default.AutoAwesome, Color(0xFFFFB27A)) { onOpen(SettingsPage.ENHANCEMENTS) }
+        SettingsOptionRow("Novera Studio", "Marcadores, A-B, letras, visualizador y copias", Icons.Default.AutoAwesome, Violet) { onOpen(SettingsPage.STUDIO) }
         Spacer(Modifier.height(22.dp))
         SettingsSectionTitle("Conectividad y biblioteca", "Fuentes de audio y dispositivos")
         Spacer(Modifier.height(10.dp))
@@ -1389,6 +1571,168 @@ private fun AboutSettingsPanel() {
             Text("Algunos efectos dependen del fabricante, del dispositivo y de la sesión activa.", color = MutedText, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+@Composable
+private fun NoveraStudioPanel(
+    advancedState: AdvancedState,
+    currentTrack: Track?,
+    positionMs: Long,
+    onCreateSmartPlaylist: (String, SmartRuleMode, String) -> Unit,
+    onPlaySmartPlaylist: (SmartPlaylist) -> Unit,
+    onDeleteSmartPlaylist: (String) -> Unit,
+    onAddBookmark: (String, Long) -> Unit,
+    onRemoveBookmark: (String, String) -> Unit,
+    onJumpBookmark: (Long) -> Unit,
+    onSetLoopA: (Long) -> Unit,
+    onSetLoopB: (Long) -> Unit,
+    onToggleLoop: (Boolean) -> Unit,
+    onClearLoop: () -> Unit,
+    onImportLyrics: () -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
+    onSaveDeviceProfile: (String) -> Unit,
+    onApplyDeviceProfile: (DeviceProfile) -> Unit
+) {
+    var smartDialog by remember { mutableStateOf(false) }
+    var bookmarkDialog by remember { mutableStateOf(false) }
+    var profileDialog by remember { mutableStateOf(false) }
+    val trackBookmarks = currentTrack?.let { advancedState.bookmarks[it.id].orEmpty() }.orEmpty()
+    val lyrics = currentTrack?.let { advancedState.lrcByTrack[it.id].orEmpty() }.orEmpty()
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        StudioSectionCard("Playlists inteligentes", "Reglas locales que generan colas automáticamente") {
+            advancedState.smartPlaylists.forEach { smart ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(smart.name, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text(smart.mode.name.lowercase().replace('_', ' '), color = SoftText, style = MaterialTheme.typography.bodySmall)
+                    }
+                    IconButton(onClick = { onPlaySmartPlaylist(smart) }) { Icon(Icons.Default.PlayArrow, "Reproducir", tint = Cyan) }
+                    IconButton(onClick = { onDeleteSmartPlaylist(smart.id) }) { Icon(Icons.Default.Delete, "Eliminar", tint = Violet) }
+                }
+            }
+            OutlinedButton(onClick = { smartDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan), shape = RoundedCornerShape(14.dp)) {
+                Icon(Icons.Default.Add, "Crear regla"); Spacer(Modifier.width(7.dp)); Text("Crear playlist inteligente")
+            }
+        }
+        StudioSectionCard("Marcadores y modo A-B", "Guarda momentos y repite fragmentos de una canción") {
+            if (currentTrack == null) {
+                Text("Reproduce una pista para crear marcadores y configurar un bucle.", color = SoftText)
+            } else {
+                Text(currentTrack.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { bookmarkDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight), shape = RoundedCornerShape(13.dp)) { Text("Añadir marcador") }
+                    OutlinedButton(onClick = { onSetLoopA(positionMs) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan), shape = RoundedCornerShape(13.dp)) { Text("A = ${formatTime(positionMs)}") }
+                    OutlinedButton(onClick = { onSetLoopB(positionMs) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = Violet), shape = RoundedCornerShape(13.dp)) { Text("B = ${formatTime(positionMs)}") }
+                }
+                Text(if (advancedState.loopA != null && advancedState.loopB != null) "A: ${formatTime(advancedState.loopA)} · B: ${formatTime(advancedState.loopB)}" else "Define A y B para activar el bucle", color = SoftText, style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Bucle A-B", color = Color.White, modifier = Modifier.weight(1f))
+                    Switch(checked = advancedState.loopEnabled && advancedState.loopA != null && advancedState.loopB != null, onCheckedChange = onToggleLoop, enabled = advancedState.loopA != null && advancedState.loopB != null)
+                    TextButton(onClick = onClearLoop) { Text("Limpiar", color = MutedText) }
+                }
+                trackBookmarks.forEach { mark ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onJumpBookmark(mark.positionMs) }) {
+                        Icon(Icons.Default.Bookmark, "Marcador", tint = Cyan)
+                        Spacer(Modifier.width(8.dp))
+                        Text(mark.title, color = Color.White, modifier = Modifier.weight(1f))
+                        Text(formatTime(mark.positionMs), color = SoftText)
+                        IconButton(onClick = { onRemoveBookmark(currentTrack.id, mark.id) }) { Icon(Icons.Default.Delete, "Eliminar marcador", tint = MutedText) }
+                    }
+                }
+            }
+        }
+        StudioSectionCard("Letras y visualizador", "Archivos LRC locales y animación reactiva") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onImportLyrics, enabled = currentTrack != null, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight), shape = RoundedCornerShape(13.dp)) { Text("Importar .lrc") }
+                Text(if (lyrics.isEmpty()) "Sin letras para esta pista" else "${lyrics.size} líneas cargadas", color = SoftText, modifier = Modifier.align(Alignment.CenterVertically))
+            }
+            if (lyrics.isNotEmpty()) LyricsPanel(lyrics, positionMs)
+            VisualizerPanel()
+        }
+        StudioSectionCard("Perfiles por dispositivo", "Guarda una configuración de audio para reaplicarla cuando quieras") {
+            advancedState.deviceProfiles.forEach { profile ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(profile.name, color = Color.White, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { onApplyDeviceProfile(profile) }) { Text("Aplicar", color = Cyan) }
+                }
+            }
+            OutlinedButton(onClick = { profileDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Violet), shape = RoundedCornerShape(14.dp)) { Text("Guardar configuración actual") }
+        }
+        StudioSectionCard("Copia de seguridad local", "Guarda playlists, reglas, marcadores, letras, perfiles, favoritos y tema") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onExportBackup, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight), shape = RoundedCornerShape(13.dp)) { Text("Exportar") }
+                OutlinedButton(onClick = onImportBackup, colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan), shape = RoundedCornerShape(13.dp)) { Text("Restaurar") }
+            }
+        }
+    }
+    if (smartDialog) SmartPlaylistDialog(onDismiss = { smartDialog = false }, onCreate = { name, mode, artist -> smartDialog = false; onCreateSmartPlaylist(name, mode, artist) })
+    if (bookmarkDialog) BookmarkDialog(onDismiss = { bookmarkDialog = false }, onCreate = { title -> bookmarkDialog = false; onAddBookmark(title, positionMs) })
+    if (profileDialog) DeviceProfileDialog(onDismiss = { profileDialog = false }, onSave = { name -> profileDialog = false; onSaveDeviceProfile(name) })
+}
+
+@Composable
+private fun StudioSectionCard(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = {
+            Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = SoftText, style = MaterialTheme.typography.bodySmall)
+            content()
+        })
+    }
+}
+
+@Composable
+private fun LyricsPanel(lines: List<LrcLine>, positionMs: Long) {
+    val activeIndex = lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+        lines.takeLast(5).forEachIndexed { index, line ->
+            val actualIndex = lines.indexOf(line)
+            Text(line.text.ifBlank { "…" }, color = if (actualIndex == activeIndex) Cyan else SoftText, fontWeight = if (actualIndex == activeIndex) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
+        }
+    }
+}
+
+@Composable
+private fun VisualizerPanel() {
+    val transition = rememberInfiniteTransition(label = "noveraVisualizer")
+    val phase by transition.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "visualizerPhase")
+    val accent = Cyan
+    Canvas(modifier = Modifier.fillMaxWidth().height(92.dp).clip(RoundedCornerShape(17.dp)).background(Color(0xFF0A1220))) {
+        val bars = 28
+        val gap = size.width / (bars * 1.35f)
+        repeat(bars) { index ->
+            val wave = (kotlin.math.sin(index * 0.72 + phase * 4.0) * 0.5 + 0.5).toFloat()
+            val height = size.height * (0.25f + wave * 0.65f)
+            drawRoundRect(accent.copy(alpha = 0.35f + wave * 0.55f), topLeft = androidx.compose.ui.geometry.Offset(index * gap, (size.height - height) / 2), size = androidx.compose.ui.geometry.Size(gap * 0.62f, height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f))
+        }
+    }
+}
+
+@Composable
+private fun SmartPlaylistDialog(onDismiss: () -> Unit, onCreate: (String, SmartRuleMode, String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(SmartRuleMode.FAVORITES) }
+    var artist by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, containerColor = DeepPanel, title = { Text("Playlist inteligente", color = Color.White) }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(name, { name = it }, label = { Text("Nombre") }, singleLine = true)
+            SmartRuleMode.values().forEach { option -> FilterChip(selected = option == mode, onClick = { mode = option }, label = { Text(option.name.lowercase().replace('_', ' ')) }, modifier = Modifier.fillMaxWidth()) }
+            if (mode == SmartRuleMode.ARTIST) OutlinedTextField(artist, { artist = it }, label = { Text("Artista contiene") }, singleLine = true)
+        }
+    }, confirmButton = { Button(onClick = { onCreate(name, mode, artist) }, enabled = name.isNotBlank() && (mode != SmartRuleMode.ARTIST || artist.isNotBlank()), colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight)) { Text("Crear") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar", color = SoftText) } })
+}
+
+@Composable
+private fun BookmarkDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, containerColor = DeepPanel, title = { Text("Nuevo marcador", color = Color.White) }, text = { OutlinedTextField(title, { title = it }, label = { Text("Nombre del momento") }, singleLine = true) }, confirmButton = { Button(onClick = { onCreate(title) }, enabled = title.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight)) { Text("Guardar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar", color = SoftText) } })
+}
+
+@Composable
+private fun DeviceProfileDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, containerColor = DeepPanel, title = { Text("Guardar perfil", color = Color.White) }, text = { OutlinedTextField(name, { name = it }, label = { Text("Nombre del dispositivo") }, singleLine = true) }, confirmButton = { Button(onClick = { onSave(name) }, enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight)) { Text("Guardar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar", color = SoftText) } })
 }
 
 @Composable
