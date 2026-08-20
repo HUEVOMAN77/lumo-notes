@@ -56,6 +56,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Bluetooth
@@ -71,8 +72,12 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -144,6 +149,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.max
 
 private val Midnight: Color @Composable get() = LocalNoveraPalette.current.midnight
@@ -185,6 +191,7 @@ data class PlayerState(
     val isShuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val isScanning: Boolean = false,
+    val playlists: List<Playlist> = emptyList(),
     val notice: String? = null
 )
 
@@ -193,6 +200,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     private val prefs = context.getSharedPreferences("novera_library", Context.MODE_PRIVATE)
     private val player: ExoPlayer = PlaybackEngine.player(context)
     private val audioEffects = AudioEffectsController(context, player)
+    private val playlistStore = PlaylistStore(context)
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
     val audioState: StateFlow<AudioFxState> = audioEffects.state
@@ -218,6 +226,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
                 audioEffects.onAudioSessionIdChanged(audioSessionId)
             }
         })
+        _state.update { it.copy(playlists = playlistStore.load()) }
         refreshLibrary()
         viewModelScope.launch {
             while (true) {
@@ -301,6 +310,67 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
         }
         player.repeatMode = next
         _state.update { it.copy(repeatMode = next) }
+    }
+
+    fun createPlaylist(name: String) {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) return
+        val playlist = Playlist(UUID.randomUUID().toString(), cleanName)
+        val updated = _state.value.playlists + playlist
+        playlistStore.save(updated)
+        _state.update { it.copy(playlists = updated, notice = "Playlist creada") }
+    }
+
+    fun deletePlaylist(playlistId: String) {
+        val updated = _state.value.playlists.filterNot { it.id == playlistId }
+        playlistStore.save(updated)
+        _state.update { it.copy(playlists = updated, notice = "Playlist eliminada") }
+    }
+
+    fun addToPlaylist(playlistId: String, track: Track) {
+        val updated = _state.value.playlists.map { playlist ->
+            if (playlist.id == playlistId && track.id !in playlist.trackIds) playlist.copy(trackIds = playlist.trackIds + track.id) else playlist
+        }
+        playlistStore.save(updated)
+        _state.update { it.copy(playlists = updated, notice = "Añadida a playlist") }
+    }
+
+    fun removeFromPlaylist(playlistId: String, trackId: String) {
+        val updated = _state.value.playlists.map { playlist ->
+            if (playlist.id == playlistId) playlist.copy(trackIds = playlist.trackIds - trackId) else playlist
+        }
+        playlistStore.save(updated)
+        _state.update { it.copy(playlists = updated, notice = "Quitada de playlist") }
+    }
+
+    fun playPlaylist(playlist: Playlist) {
+        val queue = playlist.trackIds.mapNotNull { id -> allTracks().firstOrNull { it.id == id } }
+        if (queue.isEmpty()) {
+            _state.update { it.copy(notice = "Esta playlist todavía no tiene canciones disponibles") }
+            return
+        }
+        playQueue(queue)
+    }
+
+    fun playFlow() {
+        val library = allTracks()
+        if (library.isEmpty()) {
+            _state.update { it.copy(notice = "Añade canciones para iniciar Novera Flow") }
+            return
+        }
+        val favoriteIds = prefs.getStringSet("favorites", emptySet()).orEmpty()
+        val favorites = library.filter { it.id in favoriteIds }.shuffled()
+        val rest = library.filterNot { it.id in favoriteIds }.shuffled()
+        playQueue(favorites + rest)
+        _state.update { it.copy(notice = "Novera Flow creó una sesión local") }
+    }
+
+    private fun playQueue(queue: List<Track>) {
+        PlaybackEngine.startService(context)
+        player.setMediaItems(queue.map(::toMediaItem), 0, 0L)
+        player.prepare()
+        player.play()
+        _state.update { it.copy(currentId = queue.first().id, isPlaying = true, durationMs = queue.first().durationMs, positionMs = 0L) }
     }
 
     fun toggleFavorite(track: Track) {
@@ -484,6 +554,8 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     val themeStore = remember { ThemeStore(context) }
     var activeTheme by remember { mutableStateOf(themeStore.load()) }
     var selectedTab by remember { mutableStateOf(0) }
+    var showCreatePlaylist by remember { mutableStateOf(false) }
+    var trackForPlaylist by remember { mutableStateOf<Track?>(null) }
     var showImport by remember { mutableStateOf(false) }
     val multiplePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
@@ -506,7 +578,7 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     }
     val filtered = remember(state.tracks, state.importedTracks, state.query, selectedTab) {
         val source = when (selectedTab) {
-            1 -> state.importedTracks
+            2 -> state.importedTracks
             else -> state.tracks + state.importedTracks
         }.distinctBy { it.id }
         if (state.query.isBlank()) source else source.filter { track ->
@@ -527,7 +599,7 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                         NoveraTopBar(
                             onRefresh = vm::refreshLibrary,
                             onImport = { showImport = true },
-                            onSettings = { selectedTab = 2 }
+                            onSettings = { selectedTab = 3 }
                         )
                     },
                     bottomBar = {
@@ -551,14 +623,25 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                                 tonalElevation = 0.dp
                             ) {
                             NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Default.LibraryMusic, null) }, label = { Text("Biblioteca") })
-                            NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Default.Usb, null) }, label = { Text("Importados") })
-                                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Ajustes") })
+                            NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Default.QueueMusic, null) }, label = { Text("Playlists") })
+                            NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Default.Usb, null) }, label = { Text("Importados") })
+                            NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3 }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Ajustes") })
                             }
                         }
                     }
                 ) { padding ->
                     when (selectedTab) {
-                        2 -> SettingsScreen(
+                        1 -> PlaylistsScreen(
+                            playlists = state.playlists,
+                            tracks = (state.tracks + state.importedTracks).distinctBy { it.id },
+                            onCreate = { showCreatePlaylist = true },
+                            onPlayFlow = vm::playFlow,
+                            onDelete = vm::deletePlaylist,
+                            onPlay = vm::playPlaylist,
+                            onAddTrack = { trackForPlaylist = it },
+                            onRemoveTrack = vm::removeFromPlaylist
+                        )
+                        3 -> SettingsScreen(
                             selected = activeTheme,
                             onThemeChange = {
                                 activeTheme = it
@@ -581,6 +664,7 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                             onQueryChange = vm::setQuery,
                             onPlay = vm::play,
                             onFavorite = vm::toggleFavorite,
+                            onAddToPlaylist = { trackForPlaylist = it },
                             onOpenImport = { showImport = true },
                             onRefresh = vm::refreshLibrary,
                             onPlayPause = vm::togglePlay,
@@ -595,6 +679,21 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
             }
                 }
         }
+    }
+    if (showCreatePlaylist) {
+        CreatePlaylistDialog(
+            onDismiss = { showCreatePlaylist = false },
+            onCreate = { name -> showCreatePlaylist = false; vm.createPlaylist(name) }
+        )
+    }
+    trackForPlaylist?.let { track ->
+        PlaylistPickerDialog(
+            track = track,
+            playlists = state.playlists,
+            onDismiss = { trackForPlaylist = null },
+            onChoose = { playlistId -> trackForPlaylist = null; vm.addToPlaylist(playlistId, track) },
+            onCreate = { showCreatePlaylist = true; trackForPlaylist = null }
+        )
     }
     if (showImport) {
         ImportDialog(
@@ -686,6 +785,7 @@ private fun LibraryScreen(
     onQueryChange: (String) -> Unit,
     onPlay: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
     onOpenImport: () -> Unit,
     onRefresh: () -> Unit,
     onPlayPause: () -> Unit,
@@ -755,7 +855,7 @@ private fun LibraryScreen(
             }
         } else {
             items(tracks, key = { it.id }) { track ->
-                TrackRow(track = track, active = state.currentId == track.id, favorite = isFavorite(track), onPlay = onPlay, onFavorite = onFavorite)
+                TrackRow(track = track, active = state.currentId == track.id, favorite = isFavorite(track), onPlay = onPlay, onFavorite = onFavorite, onAddToPlaylist = onAddToPlaylist)
             }
         }
     }
@@ -837,7 +937,7 @@ private fun NowPlayingCard(
 }
 
 @Composable
-private fun TrackRow(track: Track, active: Boolean, favorite: Boolean, onPlay: (Track) -> Unit, onFavorite: (Track) -> Unit) {
+private fun TrackRow(track: Track, active: Boolean, favorite: Boolean, onPlay: (Track) -> Unit, onFavorite: (Track) -> Unit, onAddToPlaylist: (Track) -> Unit) {
     val cardColor by animateColorAsState(if (active) Color(0xFF182B42) else DeepPanel, animationSpec = tween(260), label = "trackCardColor")
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(260)).clickable { onPlay(track) },
@@ -854,6 +954,7 @@ private fun TrackRow(track: Track, active: Boolean, favorite: Boolean, onPlay: (
                 Text("${track.artist} · ${track.album}", color = SoftText, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(formatTime(track.durationMs), color = MutedText, style = MaterialTheme.typography.labelSmall)
+            IconButton(onClick = { onAddToPlaylist(track) }) { Icon(Icons.Default.PlaylistAdd, "Añadir a playlist", tint = Cyan) }
             IconButton(onClick = { onFavorite(track) }) { Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorito", tint = if (favorite) Violet else SoftText) }
         }
     }
@@ -895,6 +996,187 @@ private fun ImportDialog(onDismiss: () -> Unit, onFiles: () -> Unit, onFolder: (
                 OutlinedButton(onClick = onFolder, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Violet), shape = RoundedCornerShape(14.dp)) {
                     Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(10.dp)); Text("Importar carpeta / USB")
                 }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar", color = SoftText) } }
+    )
+}
+
+@Composable
+private fun PlaylistsScreen(
+    playlists: List<Playlist>,
+    tracks: List<Track>,
+    onCreate: () -> Unit,
+    onPlayFlow: () -> Unit,
+    onDelete: (String) -> Unit,
+    onPlay: (Playlist) -> Unit,
+    onAddTrack: (Track) -> Unit,
+    onRemoveTrack: (String, String) -> Unit
+) {
+    var openedId by remember { mutableStateOf<String?>(null) }
+    val opened = playlists.firstOrNull { it.id == openedId }
+    if (opened != null) {
+        PlaylistDetailScreen(
+            playlist = opened,
+            tracks = tracks,
+            onBack = { openedId = null },
+            onPlay = { onPlay(opened) },
+            onDelete = { onDelete(opened.id); openedId = null },
+            onRemoveTrack = { trackId -> onRemoveTrack(opened.id, trackId) }
+        )
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 150.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF172B47)), shape = RoundedCornerShape(22.dp)) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Cyan, Violet))), contentAlignment = Alignment.Center) { Icon(Icons.Default.AutoAwesome, "Novera Flow", tint = Midnight) }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Novera Flow", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Tu sesión local: favoritos primero, sin internet", color = SoftText, style = MaterialTheme.typography.bodySmall)
+                    }
+                    IconButton(onClick = onPlayFlow) { Icon(Icons.Default.PlayArrow, "Iniciar Novera Flow", tint = Cyan) }
+                }
+            }
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Tus playlists", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Crea la banda sonora de cada momento", color = SoftText)
+                }
+                OutlinedButton(onClick = onCreate, shape = RoundedCornerShape(15.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) {
+                    Icon(Icons.Default.Add, "Crear playlist")
+                    Spacer(Modifier.width(6.dp))
+                    Text("Nueva")
+                }
+            }
+        }
+        if (playlists.isEmpty()) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(24.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.QueueMusic, null, tint = Cyan, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(14.dp))
+                        Text("Crea tu primera playlist", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Viaje, carretera, enamorados o el nombre que tú quieras.", color = SoftText, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(16.dp))
+                        Button(onClick = onCreate, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight), shape = RoundedCornerShape(14.dp)) { Text("Crear playlist") }
+                    }
+                }
+            }
+        } else {
+            items(playlists, key = { it.id }) { playlist ->
+                PlaylistCard(playlist = playlist, tracks = tracks, onOpen = { openedId = playlist.id }, onPlay = { onPlay(playlist) }, onDelete = { onDelete(playlist.id) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistCard(playlist: Playlist, tracks: List<Track>, onOpen: () -> Unit, onPlay: () -> Unit, onDelete: () -> Unit) {
+    val available = playlist.trackIds.count { id -> tracks.any { it.id == id } }
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen), colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(58.dp).clip(RoundedCornerShape(17.dp)).background(Brush.linearGradient(listOf(Cyan, Violet))), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.QueueMusic, null, tint = Midnight, modifier = Modifier.size(30.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(playlist.name, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("$available ${if (available == 1) "canción" else "canciones"}", color = SoftText, style = MaterialTheme.typography.bodySmall)
+            }
+            IconButton(onClick = onPlay) { Icon(Icons.Default.PlaylistPlay, "Reproducir playlist", tint = Cyan) }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Eliminar playlist", tint = Violet) }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistDetailScreen(playlist: Playlist, tracks: List<Track>, onBack: () -> Unit, onPlay: () -> Unit, onDelete: () -> Unit, onRemoveTrack: (String) -> Unit) {
+    val playlistTracks = playlist.trackIds.mapNotNull { id -> tracks.firstOrNull { it.id == id } }
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 18.dp, bottom = 10.dp)) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = SoftText) }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(playlist.name, color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${playlistTracks.size} canciones", color = SoftText)
+            }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Eliminar playlist", tint = Violet) }
+        }
+        Button(onClick = onPlay, enabled = playlistTracks.isNotEmpty(), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight), shape = RoundedCornerShape(15.dp)) {
+            Icon(Icons.Default.PlayArrow, "Reproducir")
+            Spacer(Modifier.width(8.dp))
+            Text("Reproducir playlist", fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(16.dp))
+        if (playlistTracks.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Añade canciones desde Biblioteca con el icono de playlist.", color = SoftText, textAlign = TextAlign.Center)
+            }
+        } else {
+            LazyColumn(contentPadding = PaddingValues(bottom = 150.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(playlistTracks, key = { it.id }) { track ->
+                    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(17.dp)) {
+                        Row(modifier = Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(track.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(track.artist, color = SoftText, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            IconButton(onClick = { onRemoveTrack(track.id) }) { Icon(Icons.Default.RemoveCircleOutline, "Quitar de playlist", tint = MutedText) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreatePlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DeepPanel,
+        titleContentColor = Color.White,
+        textContentColor = SoftText,
+        title = { Text("Nueva playlist", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Ponle un nombre: Viaje, Enamorados, Carretera, Noche…")
+                OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("Nombre") })
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar", color = SoftText) } },
+        confirmButton = { Button(onClick = { onCreate(name) }, enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Midnight)) { Text("Crear") } }
+    )
+}
+
+@Composable
+private fun PlaylistPickerDialog(track: Track, playlists: List<Playlist>, onDismiss: () -> Unit, onChoose: (String) -> Unit, onCreate: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DeepPanel,
+        titleContentColor = Color.White,
+        textContentColor = SoftText,
+        title = { Text("Añadir a playlist", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(track.title, color = SoftText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (playlists.isEmpty()) Text("Todavía no tienes playlists.", color = MutedText)
+                playlists.forEach { playlist ->
+                    OutlinedButton(onClick = { onChoose(playlist.id) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)) {
+                        Icon(Icons.Default.QueueMusic, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                TextButton(onClick = onCreate) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Crear nueva playlist", color = Violet) }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar", color = SoftText) } }
