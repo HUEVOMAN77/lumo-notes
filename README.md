@@ -23,6 +23,7 @@ La aplicación utiliza **Kotlin al 100 %**, Jetpack Compose para la interfaz y J
 | Temas | Cinco temas: Aurora, Obsidian, Nebula, Emerald y Copper, persistidos localmente dentro de Ajustes → Temas. |
 | Audio avanzado | Ecualizador por bandas, presets del dispositivo, ajuste manual, realce de bajos, volumen percibido, audio espacial y estado de disponibilidad. |
 | Bluetooth | Detección de salidas Bluetooth y acceso directo al panel de ajustes de Android para conectar o cambiar auriculares. |
+| Configuración | Menú por categorías con pantallas internas independientes: Temas, Ecualización, Eliminar ruido, Mejoras de sonido, Auriculares Bluetooth, Biblioteca/USB y Acerca de Novera. |
 | Privacidad | Sin cuenta, sin servidor y sin sincronización externa. |
 | Compatibilidad de código | Android Gradle Plugin 8.6.1, Kotlin 2.0.21, compileSdk 35, minSdk 24, Java/Kotlin JVM target 17. |
 
@@ -77,7 +78,7 @@ En Android 13 o superior se solicita `READ_MEDIA_AUDIO` y `POST_NOTIFICATIONS`. 
 
 ## Estado del prototipo
 
-La versión entregada está orientada a pruebas locales y compila como APK debug. La interfaz incluye un intro animado, scroll real de toda la biblioteca, mini-reproductor persistente sobre la navegación inferior, reproductor expandible con seek, aleatorio y repetición, además de transiciones Compose. La actualización añade un servicio Media3 para la notificación de controles, un widget de pantalla de inicio, cinco temas persistentes y un centro de audio avanzado con ecualizador manual/presets, perfiles de efectos y conectividad Bluetooth. La reducción de ruido se muestra como experimental y dependiente del dispositivo porque la API estándar de Android está enfocada principalmente a captura de voz, no a limpiar música reproducida. El siguiente salto de producto sería añadir edición de metadatos, playlists avanzadas y carátulas.
+La versión entregada está orientada a pruebas locales y compila como APK debug. La interfaz incluye un intro animado, scroll real de toda la biblioteca, mini-reproductor persistente sobre la navegación inferior, reproductor expandible con seek, aleatorio y repetición, además de transiciones Compose. La actualización añade un servicio Media3 para la notificación de controles, un widget de pantalla de inicio, cinco temas persistentes y un centro de audio avanzado organizado por categorías internas dentro de Configuración. La reducción de ruido se muestra como experimental y dependiente del dispositivo porque la API estándar de Android está enfocada principalmente a captura de voz, no a limpiar música reproducida. El siguiente salto de producto sería añadir edición de metadatos, playlists avanzadas y carátulas.
 
 ## Licencia
 

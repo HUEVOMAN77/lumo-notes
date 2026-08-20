@@ -52,16 +52,23 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Refresh
@@ -71,6 +78,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -892,6 +900,10 @@ private fun ImportDialog(onDismiss: () -> Unit, onFiles: () -> Unit, onFolder: (
     )
 }
 
+private enum class SettingsPage {
+    ROOT, THEMES, EQUALIZER, NOISE_REDUCTION, BLUETOOTH, ENHANCEMENTS, STORAGE, ABOUT
+}
+
 @Composable
 private fun SettingsScreen(
     selected: NoveraTheme,
@@ -905,72 +917,118 @@ private fun SettingsScreen(
     onSpatial: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
+    var page by remember { mutableStateOf(SettingsPage.ROOT) }
+    val goBack = { if (page == SettingsPage.ROOT) onBack() else page = SettingsPage.ROOT }
+    when (page) {
+        SettingsPage.ROOT -> SettingsHome(
+            selectedTheme = selected,
+            audioState = audioState,
+            onOpen = { page = it },
+            onBack = onBack
+        )
+        SettingsPage.THEMES -> SettingsDetail(title = "Temas", subtitle = "Personaliza el ambiente de Novera Audio", onBack = goBack) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                NoveraTheme.values().forEach { option ->
+                    ThemeOptionCard(option = option, selected = option == selected, onClick = { onThemeChange(option) })
+                }
+            }
+        }
+        SettingsPage.EQUALIZER -> SettingsDetail(title = "Ecualización", subtitle = "Perfiles automáticos y control manual por banda", onBack = goBack) {
+            EqualizerOnlyPanel(state = audioState, onBandChange = onBandChange, onPreset = onPreset)
+        }
+        SettingsPage.NOISE_REDUCTION -> SettingsDetail(title = "Eliminar ruido", subtitle = "Control experimental según la sesión y el dispositivo", onBack = goBack) {
+            NoiseReductionPanel(state = audioState, onToggle = onNoiseReduction)
+        }
+        SettingsPage.BLUETOOTH -> SettingsDetail(title = "Auriculares Bluetooth", subtitle = "Conecta y revisa las salidas disponibles", onBack = goBack) {
+            BluetoothAudioPanel(LocalContext.current)
+        }
+        SettingsPage.ENHANCEMENTS -> SettingsDetail(title = "Mejoras de sonido", subtitle = "Bajos, volumen percibido y espacialidad", onBack = goBack) {
+            EnhancementsPanel(state = audioState, onBassBoost = onBassBoost, onLoudness = onLoudness, onSpatial = onSpatial)
+        }
+        SettingsPage.STORAGE -> SettingsDetail(title = "Biblioteca y USB", subtitle = "Fuentes locales y almacenamiento externo", onBack = goBack) {
+            StorageSettingsPanel()
+        }
+        SettingsPage.ABOUT -> SettingsDetail(title = "Acerca de Novera", subtitle = "Información de la aplicación", onBack = goBack) {
+            AboutSettingsPanel()
+        }
+    }
+}
+
+@Composable
+private fun SettingsHome(
+    selectedTheme: NoveraTheme,
+    audioState: AudioFxState,
+    onOpen: (SettingsPage) -> Unit,
+    onBack: () -> Unit
+) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 26.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.Close, "Volver", tint = SoftText) }
             Column {
                 Text("Ajustes", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
-                Text("Personaliza tu experiencia", color = SoftText, style = MaterialTheme.typography.bodySmall)
+                Text("Organiza tu experiencia por categorías", color = SoftText, style = MaterialTheme.typography.bodySmall)
             }
         }
         Spacer(Modifier.height(24.dp))
-        SettingsSectionTitle("Temas", "Elige la identidad visual de Novera Audio")
+        SettingsSectionTitle("Personalización", "Elige cómo quieres ver y escuchar Novera")
         Spacer(Modifier.height(10.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            NoveraTheme.values().forEach { option ->
-                ThemeOptionCard(option = option, selected = option == selected, onClick = { onThemeChange(option) })
-            }
-        }
-        Spacer(Modifier.height(26.dp))
-        SettingsSectionTitle("Audio avanzado", "Controles reales sobre la sesión de reproducción")
+        SettingsOptionRow("Temas", selectedTheme.label, Icons.Default.Palette, selectedTheme.palette.cyan) { onOpen(SettingsPage.THEMES) }
+        SettingsOptionRow("Ecualización", if (audioState.equalizerAvailable) "Perfiles y bandas manuales disponibles" else "Esperando una sesión de reproducción", Icons.Default.Tune, Cyan) { onOpen(SettingsPage.EQUALIZER) }
+        SettingsOptionRow("Eliminar ruido", if (audioState.noiseReductionAvailable) "Control experimental disponible" else "No disponible en esta sesión", Icons.Default.GraphicEq, Violet) { onOpen(SettingsPage.NOISE_REDUCTION) }
+        SettingsOptionRow("Mejoras de sonido", "Bajos, volumen percibido y audio espacial", Icons.Default.AutoAwesome, Color(0xFFFFB27A)) { onOpen(SettingsPage.ENHANCEMENTS) }
+        Spacer(Modifier.height(22.dp))
+        SettingsSectionTitle("Conectividad y biblioteca", "Fuentes de audio y dispositivos")
         Spacer(Modifier.height(10.dp))
-        AudioEffectsPanel(
-            state = audioState,
-            onBandChange = onBandChange,
-            onPreset = onPreset,
-            onNoiseReduction = onNoiseReduction,
-            onBassBoost = onBassBoost,
-            onLoudness = onLoudness,
-            onSpatial = onSpatial
-        )
-        Spacer(Modifier.height(26.dp))
-        SettingsSectionTitle("Conectividad", "Auriculares y salidas de audio del dispositivo")
+        SettingsOptionRow("Auriculares Bluetooth", "Conectar o cambiar la salida de Android", Icons.Default.Bluetooth, Cyan) { onOpen(SettingsPage.BLUETOOTH) }
+        SettingsOptionRow("Biblioteca y USB", "Teléfono, OTG y carpetas importadas", Icons.Default.Usb, Violet) { onOpen(SettingsPage.STORAGE) }
+        Spacer(Modifier.height(22.dp))
+        SettingsSectionTitle("Información", "Privacidad y detalles del proyecto")
         Spacer(Modifier.height(10.dp))
-        BluetoothAudioPanel(context)
-        Spacer(Modifier.height(26.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
-            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Usb, null, tint = Cyan); Spacer(Modifier.width(12.dp)); Text("USB y almacenamiento externo", color = Color.White, fontWeight = FontWeight.SemiBold) }
-                Text("Usa el selector de carpetas de Android para elegir una memoria USB conectada por OTG. Novera Audio conserva el acceso autorizado en el dispositivo.", color = SoftText)
-                HorizontalDivider(color = Color(0xFF26364D))
-                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Settings, null, tint = Violet); Spacer(Modifier.width(12.dp)); Text("Privacidad local", color = Color.White, fontWeight = FontWeight.SemiBold) }
-                Text("Tus canciones, presets y temas se conservan en este dispositivo. No se envía audio a ningún servidor.", color = SoftText)
-            }
-        }
+        SettingsOptionRow("Acerca de Novera", "Kotlin 100 % · Java 17 · reproducción local", Icons.Default.Info, SoftText) { onOpen(SettingsPage.ABOUT) }
         Spacer(Modifier.height(24.dp))
-        Text("Versión 1.1 · Kotlin 100 % · Java 17", color = MutedText, style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(6.dp))
-        Text("Algunos efectos dependen del fabricante, del dispositivo y de la sesión de audio activa. Novera Audio muestra disponibilidad real en lugar de simular controles.", color = MutedText, style = MaterialTheme.typography.bodySmall)
+        Text("Las funciones de audio muestran su disponibilidad real según el dispositivo y la sesión activa.", color = MutedText, style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
-private fun SettingsSectionTitle(title: String, subtitle: String) {
-    Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
-    Text(subtitle, color = SoftText, style = MaterialTheme.typography.bodySmall)
+private fun SettingsDetail(title: String, subtitle: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 26.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = SoftText) }
+            Column {
+                Text(title, style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = SoftText, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        content()
+        Spacer(Modifier.height(30.dp))
+    }
 }
 
 @Composable
-private fun AudioEffectsPanel(
-    state: AudioFxState,
-    onBandChange: (Short, Short) -> Unit,
-    onPreset: (Short) -> Unit,
-    onNoiseReduction: (Boolean) -> Unit,
-    onBassBoost: (Boolean) -> Unit,
-    onLoudness: (Boolean) -> Unit,
-    onSpatial: (Boolean) -> Unit
-) {
+private fun SettingsOptionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, accent: Color, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = DeepPanel),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(modifier = Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)).background(accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = accent)
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = SoftText, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.Default.ChevronRight, "Abrir", tint = MutedText)
+        }
+    }
+}
+
+@Composable
+private fun EqualizerOnlyPanel(state: AudioFxState, onBandChange: (Short, Short) -> Unit, onPreset: (Short) -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(if (state.equalizerAvailable) "Ecualizador activo" else "Ecualizador no disponible todavía", color = if (state.equalizerAvailable) Cyan else SoftText, fontWeight = FontWeight.SemiBold)
@@ -984,7 +1042,7 @@ private fun AudioEffectsPanel(
                 }
             }
             if (state.bands.isNotEmpty()) {
-                Text("Ajuste manual por banda", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Ajuste manual", color = Color.White, fontWeight = FontWeight.SemiBold)
                 state.bands.forEach { band ->
                     val frequency = if (band.centerHz >= 1000) "${band.centerHz / 1000} kHz" else "${band.centerHz} Hz"
                     Column {
@@ -992,22 +1050,65 @@ private fun AudioEffectsPanel(
                             Text(frequency, color = SoftText, style = MaterialTheme.typography.labelMedium)
                             Text("${band.levelMb / 100} dB", color = Cyan, style = MaterialTheme.typography.labelMedium)
                         }
-                        Slider(
-                            value = band.levelMb.toFloat(),
-                            onValueChange = { onBandChange(band.index, it.toInt().toShort()) },
-                            valueRange = state.levelMinMb.toFloat()..state.levelMaxMb.toFloat(),
-                            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan, inactiveTrackColor = Color(0xFF2A405A))
-                        )
+                        Slider(value = band.levelMb.toFloat(), onValueChange = { onBandChange(band.index, it.toInt().toShort()) }, valueRange = state.levelMinMb.toFloat()..state.levelMaxMb.toFloat(), colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan, inactiveTrackColor = Color(0xFF2A405A)))
                     }
                 }
+            } else {
+                Text("Reproduce una pista para crear una sesión de efectos y mostrar las bandas compatibles.", color = SoftText)
             }
-            HorizontalDivider(color = Color(0xFF26364D))
-            EffectSwitch("Reducción de ruido", "Experimental; la disponibilidad depende del dispositivo", state.noiseReductionEnabled, state.noiseReductionAvailable, onNoiseReduction)
+        }
+    }
+}
+
+@Composable
+private fun NoiseReductionPanel(state: AudioFxState, onToggle: (Boolean) -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
+            Text("Reducción de ruido", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("El efecto se activa solo si el dispositivo ofrece una implementación compatible. En Android está orientado principalmente a captura de voz, por lo que en música se muestra como experimental.", color = SoftText)
+            EffectSwitch("Activar reducción experimental", "Puede variar según fabricante y sesión", state.noiseReductionEnabled, state.noiseReductionAvailable, onToggle)
+        }
+    }
+}
+
+@Composable
+private fun EnhancementsPanel(state: AudioFxState, onBassBoost: (Boolean) -> Unit, onLoudness: (Boolean) -> Unit, onSpatial: (Boolean) -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             EffectSwitch("Realce de bajos", "Refuerza las frecuencias graves", state.bassBoostEnabled, state.equalizerAvailable, onBassBoost)
-            EffectSwitch("Volumen percibido", "Realce de loudness de la sesión", state.loudnessEnabled, state.equalizerAvailable, onLoudness)
+            EffectSwitch("Volumen percibido", "Ajusta el loudness de la sesión", state.loudnessEnabled, state.equalizerAvailable, onLoudness)
             EffectSwitch("Audio espacial", "Virtualizador cuando el hardware lo permite", state.spatialEnabled, state.equalizerAvailable, onSpatial)
         }
     }
+}
+
+@Composable
+private fun StorageSettingsPanel() {
+    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Usb, null, tint = Cyan); Spacer(Modifier.width(12.dp)); Text("Teléfono y USB OTG", color = Color.White, fontWeight = FontWeight.SemiBold) }
+            Text("Añade archivos o carpetas desde el almacenamiento del teléfono o una memoria USB conectada. La biblioteca se conserva localmente.", color = SoftText)
+        }
+    }
+}
+
+@Composable
+private fun AboutSettingsPanel() {
+    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Novera Audio", color = Cyan, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Reproductor local privado, sin cuenta ni servidor.", color = SoftText)
+            HorizontalDivider(color = Color(0xFF26364D))
+            Text("Kotlin 100 % · Jetpack Compose · Media3 · Java 17", color = SoftText)
+            Text("Algunos efectos dependen del fabricante, del dispositivo y de la sesión activa.", color = MutedText, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionTitle(title: String, subtitle: String) {
+    Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
+    Text(subtitle, color = SoftText, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
