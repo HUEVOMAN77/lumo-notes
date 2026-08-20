@@ -23,6 +23,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -919,6 +920,9 @@ private fun SettingsScreen(
 ) {
     var page by remember { mutableStateOf(SettingsPage.ROOT) }
     val goBack = { if (page == SettingsPage.ROOT) onBack() else page = SettingsPage.ROOT }
+    BackHandler {
+        goBack()
+    }
     when (page) {
         SettingsPage.ROOT -> SettingsHome(
             selectedTheme = selected,
