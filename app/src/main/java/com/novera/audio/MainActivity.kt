@@ -212,6 +212,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     private val prefs = context.getSharedPreferences("novera_library", Context.MODE_PRIVATE)
     private val player: ExoPlayer = PlaybackEngine.player(context)
     private val audioEffects = AudioEffectsController(context, player)
+    private val audioVisualizer = AudioVisualizerController()
     private val playlistStore = PlaylistStore(context)
     private val advancedStore = AdvancedStore(context)
     private val _advancedState = MutableStateFlow(advancedStore.load())
@@ -219,6 +220,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
     val audioState: StateFlow<AudioFxState> = audioEffects.state
+    val visualizerBars: StateFlow<List<Float>> = audioVisualizer.bars
 
     init {
         player.addListener(object : Player.Listener {
@@ -240,6 +242,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
 
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 audioEffects.onAudioSessionIdChanged(audioSessionId)
+                audioVisualizer.attach(audioSessionId)
             }
         })
         _state.update { it.copy(playlists = playlistStore.load()) }
@@ -562,6 +565,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
 
     override fun onCleared() {
         audioEffects.release()
+        audioVisualizer.release()
         super.onCleared()
     }
 }
@@ -665,6 +669,7 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     val context = LocalContext.current
     val state by vm.state.collectAsState()
     val audioState by vm.audioState.collectAsState()
+    val visualizerBars by vm.visualizerBars.collectAsState()
     val advancedState by vm.advancedState.collectAsState()
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     val requestedPermissions = remember(audioPermission) {
@@ -821,6 +826,7 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                             padding = padding,
                             tracks = filtered,
                             state = state,
+                            visualizerBars = visualizerBars,
                             isFavorite = vm::isFavorite,
                             onQueryChange = vm::setQuery,
                             onPlay = vm::play,
@@ -942,6 +948,7 @@ private fun LibraryScreen(
     padding: PaddingValues,
     tracks: List<Track>,
     state: PlayerState,
+    visualizerBars: List<Float>,
     isFavorite: (Track) -> Boolean,
     onQueryChange: (String) -> Unit,
     onPlay: (Track) -> Unit,
@@ -966,6 +973,7 @@ private fun LibraryScreen(
         item(key = "now-playing") {
             NowPlayingCard(
                 state = state,
+                visualizerBars = visualizerBars,
                 onPlayPause = onPlayPause,
                 onPrevious = onPrevious,
                 onNext = onNext,
@@ -1023,8 +1031,28 @@ private fun LibraryScreen(
 }
 
 @Composable
+private fun WaveProgressBar(progress: Float, bars: List<Float>, isPlaying: Boolean) {
+    val transition = rememberInfiniteTransition(label = "waveFallback")
+    val phase by transition.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "wavePhase")
+    val accent = Cyan
+    val values = if (bars.size >= 4) bars else List(42) { index -> (0.18f + ((kotlin.math.sin((index * 0.83f + phase * 4.5f).toDouble()).toFloat() + 1f) * 0.5f) * 0.68f).coerceIn(0.12f, 0.95f) }
+    Canvas(modifier = Modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.055f))) {
+        val gap = size.width / values.size
+        values.forEachIndexed { index, value ->
+            val breathing = if (isPlaying) 1f else 0.72f
+            val height = (size.height * value * breathing).coerceAtLeast(3f)
+            val x = index * gap + gap * 0.18f
+            val color = if (index.toFloat() / values.size <= progress) accent.copy(alpha = 0.7f + value * 0.3f) else Color.White.copy(alpha = 0.14f)
+            drawRoundRect(color, topLeft = androidx.compose.ui.geometry.Offset(x, (size.height - height) / 2), size = androidx.compose.ui.geometry.Size(gap * 0.62f, height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(5f, 5f))
+        }
+        drawRoundRect(accent.copy(alpha = 0.8f), topLeft = androidx.compose.ui.geometry.Offset((size.width * progress).coerceIn(0f, size.width - 2f), 0f), size = androidx.compose.ui.geometry.Size(2f, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f))
+    }
+}
+
+@Composable
 private fun NowPlayingCard(
     state: PlayerState,
+    visualizerBars: List<Float>,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -1044,7 +1072,7 @@ private fun NowPlayingCard(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Box(modifier = Modifier.background(Brush.linearGradient(listOf(Color(0xFF1A2D49), Color(0xFF221B42)))).padding(18.dp)) {
+        Box(modifier = Modifier.border(1.dp, Brush.linearGradient(listOf(Cyan.copy(alpha = 0.42f), Violet.copy(alpha = 0.32f))), RoundedCornerShape(28.dp)).background(Brush.linearGradient(listOf(Color(0xFF1A2D49), Color(0xFF221B42)))).padding(18.dp)) {
             Column {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1064,7 +1092,7 @@ private fun NowPlayingCard(
                 }
                 Spacer(Modifier.height(14.dp))
                 val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
-                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = Cyan, trackColor = Color.White.copy(alpha = 0.12f))
+                WaveProgressBar(progress = progress, bars = visualizerBars, isPlaying = state.isPlaying)
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(formatTime(state.positionMs), style = MaterialTheme.typography.labelSmall, color = SoftText)
                     Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelSmall, color = SoftText)
