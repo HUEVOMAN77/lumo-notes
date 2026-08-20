@@ -415,6 +415,9 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     fun toggleSpatial(enabled: Boolean) = audioEffects.toggleSpatial(enabled)
     fun dismissAudioMessage() = audioEffects.clearMessage()
 
+    fun startVoiceAssistant() = VoiceAssistantService.start(context)
+    fun stopVoiceAssistant() = VoiceAssistantService.stop(context)
+
     fun createSmartPlaylist(name: String, mode: SmartRuleMode, artist: String = "") {
         val item = SmartPlaylist(UUID.randomUUID().toString(), name.trim().ifBlank { "Smart Playlist" }, mode, artist.trim())
         val updated = _advancedState.value.smartPlaylists + item
@@ -687,6 +690,13 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     }
     val themeStore = remember { ThemeStore(context) }
     var activeTheme by remember { mutableStateOf(themeStore.load()) }
+    var voiceEnabled by remember { mutableStateOf(VoiceAssistantService.isEnabled(context)) }
+    val voicePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            voiceEnabled = true
+            vm.startVoiceAssistant()
+        }
+    }
     var selectedTab by remember { mutableStateOf(0) }
     var showCreatePlaylist by remember { mutableStateOf(false) }
     var trackForPlaylist by remember { mutableStateOf<Track?>(null) }
@@ -820,6 +830,11 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                             onImportBackup = { backupImportPicker.launch(arrayOf("application/json", "text/*")) },
                             onSaveDeviceProfile = vm::saveCurrentDeviceProfile,
                             onApplyDeviceProfile = vm::applyDeviceProfile,
+                            voiceEnabled = voiceEnabled,
+                            onVoiceToggle = { enabled ->
+                                if (enabled) voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                else { voiceEnabled = false; vm.stopVoiceAssistant() }
+                            },
                             onBack = { selectedTab = 0 }
                         )
                         else -> LibraryScreen(
@@ -1405,6 +1420,8 @@ private fun SettingsScreen(
     onImportBackup: () -> Unit,
     onSaveDeviceProfile: (String) -> Unit,
     onApplyDeviceProfile: (DeviceProfile) -> Unit,
+    voiceEnabled: Boolean,
+    onVoiceToggle: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     var page by remember { mutableStateOf(SettingsPage.ROOT) }
@@ -1457,7 +1474,9 @@ private fun SettingsScreen(
                 onExportBackup = onExportBackup,
                 onImportBackup = onImportBackup,
                 onSaveDeviceProfile = onSaveDeviceProfile,
-                onApplyDeviceProfile = onApplyDeviceProfile
+                onApplyDeviceProfile = onApplyDeviceProfile,
+                voiceEnabled = voiceEnabled,
+                onVoiceToggle = onVoiceToggle
             )
         }
         SettingsPage.STORAGE -> SettingsDetail(title = "Biblioteca y USB", subtitle = "Fuentes locales y almacenamiento externo", onBack = goBack) {
@@ -1640,7 +1659,9 @@ private fun NoveraStudioPanel(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onSaveDeviceProfile: (String) -> Unit,
-    onApplyDeviceProfile: (DeviceProfile) -> Unit
+    onApplyDeviceProfile: (DeviceProfile) -> Unit,
+    voiceEnabled: Boolean,
+    onVoiceToggle: (Boolean) -> Unit
 ) {
     var smartDialog by remember { mutableStateOf(false) }
     var bookmarkDialog by remember { mutableStateOf(false) }
@@ -1706,6 +1727,16 @@ private fun NoveraStudioPanel(
                 }
             }
             OutlinedButton(onClick = { profileDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Violet), shape = RoundedCornerShape(14.dp)) { Text("Guardar configuración actual") }
+        }
+        StudioSectionCard("Asistente de voz local", "Controla Novera con la pantalla bloqueada mediante una palabra de activación") {
+            Text("Actívalo solo cuando quieras usar comandos como: Novera, pausa; Novera, reproduce mi canción; Novera, siguiente; Novera, escanea mi música; Novera, añade esto a Carretera.", color = SoftText, style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(if (voiceEnabled) "Escucha local activa" else "Escucha local desactivada", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(if (voiceEnabled) "Puedes apagar la pantalla; verás una notificación persistente" else "Requiere permiso de micrófono y reconocimiento on-device", color = MutedText, style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = voiceEnabled, onCheckedChange = onVoiceToggle)
+            }
         }
         StudioSectionCard("Copia de seguridad local", "Guarda playlists, reglas, marcadores, letras, perfiles, favoritos y tema") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
