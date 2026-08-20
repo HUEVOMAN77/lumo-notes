@@ -11,6 +11,8 @@ La aplicación utiliza **Kotlin al 100 %**, Jetpack Compose para la interfaz y J
 | Área | Implementación |
 | --- | --- |
 | Reproducción | ExoPlayer Media3 con cola local, reproducción, pausa, anterior, siguiente, aleatorio y repetición. |
+| Segundo plano | Servicio Media3 con sesión persistente y notificación multimedia para cambiar de canción sin abrir la app. |
+| Widget | Widget de pantalla de inicio con pista actual, estado, anterior, reproducir/pausar y siguiente. |
 | Biblioteca del teléfono | Escaneo de MediaStore para descubrir música local disponible. |
 | Memoria USB | Selector de documentos de Android para escoger archivos o recorrer una carpeta USB completa. |
 | Formatos | MP3, M4A, AAC, FLAC, WAV, OGG, OPUS y WMA cuando el dispositivo proporcione un decodificador compatible. |
@@ -18,6 +20,7 @@ La aplicación utiliza **Kotlin al 100 %**, Jetpack Compose para la interfaz y J
 | Diseño | Tema oscuro futurista con fondo midnight, paneles grafito, acentos cian/violeta y tarjetas de vidrio tecnológico. |
 | Animaciones | Intro animado al iniciar, entrada/salida del mini-reproductor, expansión del reproductor, cambios de color y transiciones de contenido. |
 | Navegación | Biblioteca implementada como una única `LazyColumn` real, con scroll hasta el final y navegación inferior independiente. |
+| Temas | Cinco temas: Aurora, Obsidian, Nebula, Emerald y Copper, persistidos localmente. |
 | Privacidad | Sin cuenta, sin servidor y sin sincronización externa. |
 | Compatibilidad de código | Android Gradle Plugin 8.6.1, Kotlin 2.0.21, compileSdk 35, minSdk 24, Java/Kotlin JVM target 17. |
 
@@ -68,11 +71,11 @@ Para instalarlo con un dispositivo conectado y autorizado por ADB:
 
 ## Permisos
 
-En Android 13 o superior se solicita `READ_MEDIA_AUDIO`. En versiones anteriores se utiliza `READ_EXTERNAL_STORAGE`. Para memorias USB y ubicaciones seleccionadas manualmente se utiliza el Storage Access Framework de Android, que muestra el diálogo del sistema y evita solicitar acceso indiscriminado a todo el almacenamiento.
+En Android 13 o superior se solicita `READ_MEDIA_AUDIO` y `POST_NOTIFICATIONS`. En versiones anteriores se utiliza `READ_EXTERNAL_STORAGE`. Para la reproducción persistente se declara un servicio de primer plano de tipo multimedia. Para memorias USB y ubicaciones seleccionadas manualmente se utiliza el Storage Access Framework de Android, que muestra el diálogo del sistema y evita solicitar acceso indiscriminado a todo el almacenamiento.
 
 ## Estado del prototipo
 
-La versión entregada está orientada a pruebas locales y compila como APK debug. La interfaz incluye un intro animado, scroll real de toda la biblioteca, mini-reproductor persistente sobre la navegación inferior, reproductor expandible con seek, aleatorio y repetición, además de transiciones Compose. El siguiente salto de producto sería añadir una sesión Media3 persistente para controles completos de pantalla bloqueada, edición de metadatos, playlists avanzadas, carátulas y un ecualizador dedicado.
+La versión entregada está orientada a pruebas locales y compila como APK debug. La interfaz incluye un intro animado, scroll real de toda la biblioteca, mini-reproductor persistente sobre la navegación inferior, reproductor expandible con seek, aleatorio y repetición, además de transiciones Compose. Esta actualización añade un servicio Media3 para la notificación de controles, un widget de pantalla de inicio y cinco temas persistentes. El siguiente salto de producto sería añadir edición de metadatos, playlists avanzadas, carátulas y un ecualizador dedicado.
 
 ## Licencia
 

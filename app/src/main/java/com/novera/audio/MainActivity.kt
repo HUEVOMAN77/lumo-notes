@@ -93,6 +93,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -116,13 +117,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -135,13 +133,13 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.max
 
-private val Midnight = Color(0xFF070B16)
-private val DeepPanel = Color(0xFF101827)
-private val RaisedPanel = Color(0xFF172238)
-private val Cyan = Color(0xFF65E9FF)
-private val Violet = Color(0xFF9E7BFF)
-private val SoftText = Color(0xFFAEBBD0)
-private val MutedText = Color(0xFF6D7B91)
+private val Midnight: Color @Composable get() = LocalNoveraPalette.current.midnight
+private val DeepPanel: Color @Composable get() = LocalNoveraPalette.current.deepPanel
+private val RaisedPanel: Color @Composable get() = LocalNoveraPalette.current.raisedPanel
+private val Cyan: Color @Composable get() = LocalNoveraPalette.current.cyan
+private val Violet: Color @Composable get() = LocalNoveraPalette.current.violet
+private val SoftText: Color @Composable get() = LocalNoveraPalette.current.softText
+private val MutedText: Color @Composable get() = LocalNoveraPalette.current.mutedText
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -180,36 +178,27 @@ data class PlayerState(
 class PlayerViewModel(application: android.app.Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
     private val prefs = context.getSharedPreferences("novera_library", Context.MODE_PRIVATE)
-    private val player: ExoPlayer
+    private val player: ExoPlayer = PlaybackEngine.player(context)
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
 
     init {
-        val selector = DefaultTrackSelector(context)
-        player = ExoPlayer.Builder(context).setTrackSelector(selector).build().apply {
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .setUsage(C.USAGE_MEDIA)
-                    .build(),
-                true
-            )
-            setHandleAudioBecomingNoisy(true)
-            addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    _state.update { it.copy(isPlaying = isPlaying) }
-                }
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                _state.update { it.copy(isPlaying = isPlaying) }
+                syncWidget()
+            }
 
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    val id = mediaItem?.mediaId
-                    _state.update { it.copy(currentId = id, durationMs = player.duration.takeIf { value -> value > 0 } ?: 0L) }
-                }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val id = mediaItem?.mediaId
+                _state.update { it.copy(currentId = id, durationMs = player.duration.takeIf { value -> value > 0 } ?: 0L) }
+                syncWidget()
+            }
 
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    _state.update { it.copy(durationMs = player.duration.takeIf { value -> value > 0 } ?: 0L) }
-                }
-            })
-        }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                _state.update { it.copy(durationMs = player.duration.takeIf { value -> value > 0 } ?: 0L) }
+            }
+        })
         refreshLibrary()
         viewModelScope.launch {
             while (true) {
@@ -252,6 +241,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     }
 
     fun play(track: Track) {
+        PlaybackEngine.startService(context)
         val queue = allTracks()
         val index = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
         player.setMediaItems(queue.map(::toMediaItem), index, 0L)
@@ -266,6 +256,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
         } else if (player.isPlaying) {
             player.pause()
         } else {
+            PlaybackEngine.startService(context)
             player.play()
         }
     }
@@ -303,6 +294,11 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     fun isFavorite(track: Track): Boolean = prefs.getStringSet("favorites", emptySet())?.contains(track.id) == true
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
+
+    private fun syncWidget() {
+        val track = allTracks().firstOrNull { it.id == player.currentMediaItem?.mediaId }
+        if (track != null) WidgetStateStore.save(context, track.title, track.artist, player.isPlaying)
+    }
 
     fun currentTrack(): Track? = allTracks().firstOrNull { it.id == _state.value.currentId }
 
@@ -356,7 +352,6 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     }
 
     override fun onCleared() {
-        player.release()
         super.onCleared()
     }
 }
@@ -444,13 +439,21 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     val context = LocalContext.current
     val state by vm.state.collectAsState()
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
-    var showIntro by remember { mutableStateOf(true) }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.refreshLibrary() }
-    LaunchedEffect(showIntro) {
-        if (!showIntro && ContextCompat.checkSelfPermission(context, audioPermission) != PackageManager.PERMISSION_GRANTED) {
-            permissionLauncher.launch(audioPermission)
-        }
+    val requestedPermissions = remember(audioPermission) {
+        buildList {
+            add(audioPermission)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.toTypedArray()
     }
+    var showIntro by remember { mutableStateOf(true) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.refreshLibrary() }
+    LaunchedEffect(showIntro) {
+        val missingAudio = ContextCompat.checkSelfPermission(context, audioPermission) != PackageManager.PERMISSION_GRANTED
+        val missingNotifications = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (!showIntro && (missingAudio || missingNotifications)) permissionLauncher.launch(requestedPermissions)
+    }
+    val themeStore = remember { ThemeStore(context) }
+    var activeTheme by remember { mutableStateOf(themeStore.load()) }
     var selectedTab by remember { mutableStateOf(0) }
     var showImport by remember { mutableStateOf(false) }
     val multiplePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -482,6 +485,7 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
         }
     }
 
+    CompositionLocalProvider(LocalNoveraPalette provides activeTheme.palette) {
         MaterialTheme(colorScheme = noveraColors()) {
         if (showIntro) {
             IntroScreen(onFinished = { showIntro = false })
@@ -525,7 +529,14 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                     }
                 ) { padding ->
                     when (selectedTab) {
-                        2 -> SettingsScreen(onBack = { selectedTab = 0 })
+                        2 -> SettingsScreen(
+                            selected = activeTheme,
+                            onThemeChange = {
+                                activeTheme = it
+                                themeStore.save(it)
+                            },
+                            onBack = { selectedTab = 0 }
+                        )
                         else -> LibraryScreen(
                             padding = padding,
                             tracks = filtered,
@@ -546,9 +557,9 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                     }
                 }
             }
+                }
         }
     }
-
     if (showImport) {
         ImportDialog(
             onDismiss = { showImport = false },
@@ -848,7 +859,7 @@ private fun ImportDialog(onDismiss: () -> Unit, onFiles: () -> Unit, onFolder: (
 }
 
 @Composable
-private fun SettingsScreen(onBack: () -> Unit) {
+private fun SettingsScreen(selected: NoveraTheme, onThemeChange: (NoveraTheme) -> Unit, onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 26.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.Close, "Volver", tint = SoftText) }
@@ -857,6 +868,14 @@ private fun SettingsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(22.dp))
         Text("Novera Audio", style = MaterialTheme.typography.titleLarge, color = Cyan, fontWeight = FontWeight.Bold)
         Text("Reproducción local, privada y sin cuentas.", color = SoftText)
+        Spacer(Modifier.height(22.dp))
+        Text("Temas visuales", style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            NoveraTheme.values().forEach { option ->
+                ThemeOptionCard(option = option, selected = option == selected, onClick = { onThemeChange(option) })
+            }
+        }
         Spacer(Modifier.height(22.dp))
         Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
             Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -875,6 +894,27 @@ private fun SettingsScreen(onBack: () -> Unit) {
 }
 
 @Composable
+private fun ThemeOptionCard(option: NoveraTheme, selected: Boolean, onClick: () -> Unit) {
+    val borderColor = if (selected) option.palette.cyan else Color(0xFF26364D)
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = option.palette.deepPanel),
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+    ) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Brush.linearGradient(listOf(option.palette.cyan, option.palette.violet))))
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(option.label, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(option.description, color = SoftText, style = MaterialTheme.typography.bodySmall)
+            }
+            if (selected) Icon(Icons.Default.Favorite, "Tema seleccionado", tint = option.palette.cyan)
+        }
+    }
+}
+
+@Composable
 private fun NoticeBar(text: String) {
     Box(modifier = Modifier.fillMaxSize().padding(bottom = 76.dp), contentAlignment = Alignment.BottomCenter) {
         Surface(color = RaisedPanel, shape = RoundedCornerShape(16.dp), shadowElevation = 8.dp, modifier = Modifier.padding(16.dp)) {
@@ -883,6 +923,7 @@ private fun NoticeBar(text: String) {
     }
 }
 
+@Composable
 private fun noveraColors() = androidx.compose.material3.darkColorScheme(
     primary = Cyan,
     onPrimary = Midnight,
