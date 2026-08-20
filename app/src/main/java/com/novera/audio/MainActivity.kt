@@ -3,6 +3,8 @@ package com.novera.audio
 import android.Manifest
 import android.content.ContentResolver
 import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -10,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.content.pm.PackageManager
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
@@ -88,6 +91,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -179,8 +183,10 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     private val context = application.applicationContext
     private val prefs = context.getSharedPreferences("novera_library", Context.MODE_PRIVATE)
     private val player: ExoPlayer = PlaybackEngine.player(context)
+    private val audioEffects = AudioEffectsController(context, player)
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
+    val audioState: StateFlow<AudioFxState> = audioEffects.state
 
     init {
         player.addListener(object : Player.Listener {
@@ -197,6 +203,10 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _state.update { it.copy(durationMs = player.duration.takeIf { value -> value > 0 } ?: 0L) }
+            }
+
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                audioEffects.onAudioSessionIdChanged(audioSessionId)
             }
         })
         refreshLibrary()
@@ -295,6 +305,14 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
 
+    fun setEqualizerBand(index: Short, levelMb: Short) = audioEffects.setBandLevel(index, levelMb)
+    fun applyEqualizerPreset(index: Short) = audioEffects.applyPreset(index)
+    fun toggleNoiseReduction(enabled: Boolean) = audioEffects.toggleNoiseReduction(enabled)
+    fun toggleBassBoost(enabled: Boolean) = audioEffects.toggleBassBoost(enabled)
+    fun toggleLoudness(enabled: Boolean) = audioEffects.toggleLoudness(enabled)
+    fun toggleSpatial(enabled: Boolean) = audioEffects.toggleSpatial(enabled)
+    fun dismissAudioMessage() = audioEffects.clearMessage()
+
     private fun syncWidget() {
         val track = allTracks().firstOrNull { it.id == player.currentMediaItem?.mediaId }
         if (track != null) WidgetStateStore.save(context, track.title, track.artist, player.isPlaying)
@@ -352,6 +370,7 @@ class PlayerViewModel(application: android.app.Application) : AndroidViewModel(a
     }
 
     override fun onCleared() {
+        audioEffects.release()
         super.onCleared()
     }
 }
@@ -438,6 +457,7 @@ private fun IntroScreen(onFinished: () -> Unit) {
 private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
     val context = LocalContext.current
     val state by vm.state.collectAsState()
+    val audioState by vm.audioState.collectAsState()
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     val requestedPermissions = remember(audioPermission) {
         buildList {
@@ -535,6 +555,13 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
                                 activeTheme = it
                                 themeStore.save(it)
                             },
+                            audioState = audioState,
+                            onBandChange = vm::setEqualizerBand,
+                            onPreset = vm::applyEqualizerPreset,
+                            onNoiseReduction = vm::toggleNoiseReduction,
+                            onBassBoost = vm::toggleBassBoost,
+                            onLoudness = vm::toggleLoudness,
+                            onSpatial = vm::toggleSpatial,
                             onBack = { selectedTab = 0 }
                         )
                         else -> LibraryScreen(
@@ -573,6 +600,13 @@ private fun NoveraApp(vm: PlayerViewModel = viewModel()) {
             vm.dismissNotice()
         }
         NoticeBar(notice)
+    }
+    audioState.message?.let { message ->
+        LaunchedEffect(message) {
+            delay(2800)
+            vm.dismissAudioMessage()
+        }
+        NoticeBar(message)
     }
 }
 
@@ -859,37 +893,161 @@ private fun ImportDialog(onDismiss: () -> Unit, onFiles: () -> Unit, onFolder: (
 }
 
 @Composable
-private fun SettingsScreen(selected: NoveraTheme, onThemeChange: (NoveraTheme) -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(
+    selected: NoveraTheme,
+    onThemeChange: (NoveraTheme) -> Unit,
+    audioState: AudioFxState,
+    onBandChange: (Short, Short) -> Unit,
+    onPreset: (Short) -> Unit,
+    onNoiseReduction: (Boolean) -> Unit,
+    onBassBoost: (Boolean) -> Unit,
+    onLoudness: (Boolean) -> Unit,
+    onSpatial: (Boolean) -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 26.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.Close, "Volver", tint = SoftText) }
-            Text("Ajustes", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+            Column {
+                Text("Ajustes", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Personaliza tu experiencia", color = SoftText, style = MaterialTheme.typography.bodySmall)
+            }
         }
-        Spacer(Modifier.height(22.dp))
-        Text("Novera Audio", style = MaterialTheme.typography.titleLarge, color = Cyan, fontWeight = FontWeight.Bold)
-        Text("Reproducción local, privada y sin cuentas.", color = SoftText)
-        Spacer(Modifier.height(22.dp))
-        Text("Temas visuales", style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(24.dp))
+        SettingsSectionTitle("Temas", "Elige la identidad visual de Novera Audio")
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             NoveraTheme.values().forEach { option ->
                 ThemeOptionCard(option = option, selected = option == selected, onClick = { onThemeChange(option) })
             }
         }
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(26.dp))
+        SettingsSectionTitle("Audio avanzado", "Controles reales sobre la sesión de reproducción")
+        Spacer(Modifier.height(10.dp))
+        AudioEffectsPanel(
+            state = audioState,
+            onBandChange = onBandChange,
+            onPreset = onPreset,
+            onNoiseReduction = onNoiseReduction,
+            onBassBoost = onBassBoost,
+            onLoudness = onLoudness,
+            onSpatial = onSpatial
+        )
+        Spacer(Modifier.height(26.dp))
+        SettingsSectionTitle("Conectividad", "Auriculares y salidas de audio del dispositivo")
+        Spacer(Modifier.height(10.dp))
+        BluetoothAudioPanel(context)
+        Spacer(Modifier.height(26.dp))
         Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
             Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Usb, null, tint = Cyan); Spacer(Modifier.width(12.dp)); Text("USB y almacenamiento externo", color = Color.White, fontWeight = FontWeight.SemiBold) }
                 Text("Usa el selector de carpetas de Android para elegir una memoria USB conectada por OTG. Novera Audio conserva el acceso autorizado en el dispositivo.", color = SoftText)
                 HorizontalDivider(color = Color(0xFF26364D))
-                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Settings, null, tint = Violet); Spacer(Modifier.width(12.dp)); Text("Diseño Novera", color = Color.White, fontWeight = FontWeight.SemiBold) }
-                Text("Tema nocturno futurista con acentos cian y violeta. La biblioteca se mantiene local.", color = SoftText)
+                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Settings, null, tint = Violet); Spacer(Modifier.width(12.dp)); Text("Privacidad local", color = Color.White, fontWeight = FontWeight.SemiBold) }
+                Text("Tus canciones, presets y temas se conservan en este dispositivo. No se envía audio a ningún servidor.", color = SoftText)
             }
         }
         Spacer(Modifier.height(24.dp))
-        Text("Versión 1.0 · Kotlin 100 % · Java 17", color = MutedText, style = MaterialTheme.typography.labelMedium)
+        Text("Versión 1.1 · Kotlin 100 % · Java 17", color = MutedText, style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(6.dp))
-        Text("El nombre Novera Audio es una propuesta original de proyecto. Antes de publicar en una tienda, comprueba disponibilidad de marca y dominio en tu jurisdicción.", color = MutedText, style = MaterialTheme.typography.bodySmall)
+        Text("Algunos efectos dependen del fabricante, del dispositivo y de la sesión de audio activa. Novera Audio muestra disponibilidad real en lugar de simular controles.", color = MutedText, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun SettingsSectionTitle(title: String, subtitle: String) {
+    Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
+    Text(subtitle, color = SoftText, style = MaterialTheme.typography.bodySmall)
+}
+
+@Composable
+private fun AudioEffectsPanel(
+    state: AudioFxState,
+    onBandChange: (Short, Short) -> Unit,
+    onPreset: (Short) -> Unit,
+    onNoiseReduction: (Boolean) -> Unit,
+    onBassBoost: (Boolean) -> Unit,
+    onLoudness: (Boolean) -> Unit,
+    onSpatial: (Boolean) -> Unit
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(if (state.equalizerAvailable) "Ecualizador activo" else "Ecualizador no disponible todavía", color = if (state.equalizerAvailable) Cyan else SoftText, fontWeight = FontWeight.SemiBold)
+            Text("Sesión ${state.sessionId}. Los cambios se aplican a la reproducción actual.", color = MutedText, style = MaterialTheme.typography.bodySmall)
+            if (state.presets.isNotEmpty()) {
+                Text("Perfiles automáticos", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.presets.take(8).forEachIndexed { index, name ->
+                        FilterChip(selected = state.selectedPreset == index.toShort(), onClick = { onPreset(index.toShort()) }, label = { Text(name) }, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+            if (state.bands.isNotEmpty()) {
+                Text("Ajuste manual por banda", color = Color.White, fontWeight = FontWeight.SemiBold)
+                state.bands.forEach { band ->
+                    val frequency = if (band.centerHz >= 1000) "${band.centerHz / 1000} kHz" else "${band.centerHz} Hz"
+                    Column {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(frequency, color = SoftText, style = MaterialTheme.typography.labelMedium)
+                            Text("${band.levelMb / 100} dB", color = Cyan, style = MaterialTheme.typography.labelMedium)
+                        }
+                        Slider(
+                            value = band.levelMb.toFloat(),
+                            onValueChange = { onBandChange(band.index, it.toInt().toShort()) },
+                            valueRange = state.levelMinMb.toFloat()..state.levelMaxMb.toFloat(),
+                            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan, inactiveTrackColor = Color(0xFF2A405A))
+                        )
+                    }
+                }
+            }
+            HorizontalDivider(color = Color(0xFF26364D))
+            EffectSwitch("Reducción de ruido", "Experimental; la disponibilidad depende del dispositivo", state.noiseReductionEnabled, state.noiseReductionAvailable, onNoiseReduction)
+            EffectSwitch("Realce de bajos", "Refuerza las frecuencias graves", state.bassBoostEnabled, state.equalizerAvailable, onBassBoost)
+            EffectSwitch("Volumen percibido", "Realce de loudness de la sesión", state.loudnessEnabled, state.equalizerAvailable, onLoudness)
+            EffectSwitch("Audio espacial", "Virtualizador cuando el hardware lo permite", state.spatialEnabled, state.equalizerAvailable, onSpatial)
+        }
+    }
+}
+
+@Composable
+private fun EffectSwitch(title: String, description: String, checked: Boolean, available: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = if (available) Color.White else MutedText, fontWeight = FontWeight.SemiBold)
+            Text(if (available) description else "No disponible en esta sesión", color = MutedText, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = available)
+    }
+}
+
+@Composable
+private fun BluetoothAudioPanel(context: Context) {
+    val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val outputs = remember(audioManager) {
+        runCatching {
+            audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                .filter { device ->
+                    device.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                        device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_BROADCAST
+                }
+                .map { it.productName?.toString()?.ifBlank { "Auricular Bluetooth" } ?: "Auricular Bluetooth" }
+        }.getOrDefault(emptyList())
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = DeepPanel), shape = RoundedCornerShape(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(if (outputs.isEmpty()) "No se detectó una salida Bluetooth activa" else "Salidas detectadas", color = Color.White, fontWeight = FontWeight.SemiBold)
+            if (outputs.isNotEmpty()) outputs.distinct().forEach { Text("• $it", color = Cyan) }
+            Text("La conexión y el cambio de salida se gestionan con el panel de audio de Android para respetar el control del sistema y de los auriculares.", color = SoftText, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = {
+                context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan), shape = RoundedCornerShape(14.dp)) {
+                Text("Conectar auriculares Bluetooth")
+            }
+        }
     }
 }
 
