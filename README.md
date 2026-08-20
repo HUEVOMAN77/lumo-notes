@@ -18,7 +18,7 @@ La aplicación utiliza **Kotlin al 100 %**, Jetpack Compose para la interfaz y J
 | Formatos | MP3, M4A, AAC, FLAC, WAV, OGG, OPUS y WMA cuando el dispositivo proporcione un decodificador compatible. |
 | Organización | Búsqueda por título, artista o álbum; favoritos y separación entre biblioteca del teléfono e importados. |
 | Diseño | Tema oscuro futurista con fondo midnight, paneles grafito, acentos cian/violeta y tarjetas de vidrio tecnológico. |
-| Animaciones | Intro animado al iniciar, entrada/salida del mini-reproductor, expansión del reproductor, cambios de color y transiciones de contenido. |
+| Animaciones | Intro animado de 3 segundos con el ícono oficial, halo pulsante, rotación sutil, revelado del nombre y transición hacia la biblioteca; además de entrada/salida del mini-reproductor, expansión del reproductor, cambios de color y transiciones de contenido. |
 | Navegación | Biblioteca implementada como una única `LazyColumn` real, con scroll hasta el final y navegación inferior independiente. |
 | Temas | Cinco temas: Aurora, Obsidian, Nebula, Emerald y Copper, persistidos localmente dentro de Ajustes → Temas. |
 | Audio avanzado | Ecualizador por bandas, presets del dispositivo, ajuste manual, realce de bajos, volumen percibido, audio espacial y estado de disponibilidad. |

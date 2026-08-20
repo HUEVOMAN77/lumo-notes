@@ -26,6 +26,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -33,7 +34,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ColumnScope
@@ -130,6 +133,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -617,24 +621,40 @@ private fun isAudioFile(name: String?, mime: String?): Boolean {
 @Composable
 private fun IntroScreen(onFinished: () -> Unit) {
     var started by remember { mutableStateOf(false) }
-    val logoScale by animateFloatAsState(if (started) 1f else 0.72f, animationSpec = tween(850), label = "introLogoScale")
-    val logoAlpha by animateFloatAsState(if (started) 1f else 0f, animationSpec = tween(650), label = "introLogoAlpha")
+    val logoScale by animateFloatAsState(if (started) 1f else 0.68f, animationSpec = tween(900), label = "introLogoScale")
+    val logoAlpha by animateFloatAsState(if (started) 1f else 0f, animationSpec = tween(700), label = "introLogoAlpha")
+    val transition = rememberInfiniteTransition(label = "introMotion")
+    val pulse by transition.animateFloat(initialValue = 0.92f, targetValue = 1.08f, animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse), label = "introPulse")
+    val haloAlpha by transition.animateFloat(initialValue = 0.22f, targetValue = 0.62f, animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "introHalo")
+    val orbit by transition.animateFloat(initialValue = -7f, targetValue = 7f, animationSpec = infiniteRepeatable(tween(1900), RepeatMode.Reverse), label = "introOrbit")
     LaunchedEffect(Unit) {
         started = true
-        delay(2300)
+        delay(3000)
         onFinished()
     }
-    Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Midnight, Color(0xFF101B35), Color(0xFF1A1232)))), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF1C2F4B), Midnight, Color(0xFF050812)))),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Cyan.copy(alpha = 0.05f), Violet.copy(alpha = 0.12f), Color.Transparent))))
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.graphicsLayer { alpha = logoAlpha; scaleX = logoScale; scaleY = logoScale }) {
-            Box(modifier = Modifier.size(128.dp).clip(RoundedCornerShape(38.dp)).background(Brush.linearGradient(listOf(Cyan, Violet))).shadow(18.dp, RoundedCornerShape(38.dp)), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = Midnight, modifier = Modifier.size(70.dp))
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(230.dp)) {
+                Box(modifier = Modifier.size(190.dp).graphicsLayer { alpha = haloAlpha; scaleX = pulse; scaleY = pulse }.clip(CircleShape).background(Brush.radialGradient(listOf(Cyan.copy(alpha = 0.32f), Violet.copy(alpha = 0.18f), Color.Transparent))))
+                Box(modifier = Modifier.size(164.dp).graphicsLayer { rotationZ = orbit }.clip(RoundedCornerShape(48.dp)).background(Brush.linearGradient(listOf(Cyan.copy(alpha = 0.85f), Violet.copy(alpha = 0.9f)))).shadow(26.dp, RoundedCornerShape(48.dp)), contentAlignment = Alignment.Center) {
+                    Image(painter = painterResource(R.drawable.novera_audio_icon), contentDescription = "Novera Audio", modifier = Modifier.size(142.dp).clip(RoundedCornerShape(42.dp)))
+                }
+                Box(modifier = Modifier.size(206.dp).graphicsLayer { rotationZ = -orbit * 0.7f }.border(1.dp, Cyan.copy(alpha = haloAlpha), CircleShape))
             }
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(18.dp))
             Text("NOVERA", style = MaterialTheme.typography.displaySmall, color = Color.White, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
             Text("AUDIO", style = MaterialTheme.typography.titleMedium, color = Cyan, letterSpacing = 6.sp)
-            Spacer(Modifier.height(24.dp))
-            AnimatedVisibility(visible = started, enter = fadeIn(tween(650))) {
-                Text("LOCAL / UNBOUND", style = MaterialTheme.typography.labelMedium, color = SoftText, letterSpacing = 2.4.sp)
+            Spacer(Modifier.height(22.dp))
+            AnimatedVisibility(visible = started, enter = fadeIn(tween(850)) + slideInVertically(tween(850)) { it / 2 }) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("LOCAL / UNBOUND", style = MaterialTheme.typography.labelMedium, color = SoftText, letterSpacing = 2.4.sp)
+                    Spacer(Modifier.height(18.dp))
+                    LinearProgressIndicator(progress = { 1f }, modifier = Modifier.width(110.dp).height(2.dp), color = Cyan, trackColor = Color.White.copy(alpha = 0.12f))
+                }
             }
         }
     }
