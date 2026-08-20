@@ -2,6 +2,7 @@ package com.novera.audio
 
 import android.content.Context
 import android.media.audiofx.BassBoost
+import android.os.Build
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.NoiseSuppressor
@@ -47,6 +48,7 @@ class AudioEffectsController(
     private var bassBoost: BassBoost? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var virtualizer: Virtualizer? = null
+    private val skipVendorEffects = Build.MANUFACTURER.lowercase().let { it.contains("huawei") || it.contains("honor") } || Build.BRAND.lowercase().let { it.contains("huawei") || it.contains("honor") }
 
     init {
         onAudioSessionIdChanged(player.audioSessionId)
@@ -117,6 +119,7 @@ class AudioEffectsController(
 
     private fun createEffects(audioSessionId: Int): AudioFxState {
         var current = AudioFxState(sessionId = audioSessionId)
+        if (skipVendorEffects) return current
         equalizer = runCatching { Equalizer(0, audioSessionId) }.getOrNull()
         equalizer?.let { effect ->
             runCatching {
@@ -139,10 +142,10 @@ class AudioEffectsController(
             }.onFailure { equalizer = null }
         }
 
-        noiseSuppressor = runCatching { NoiseSuppressor.create(audioSessionId) }.getOrNull()
-        bassBoost = runCatching { BassBoost(0, audioSessionId) }.getOrNull()
-        loudnessEnhancer = runCatching { LoudnessEnhancer(audioSessionId) }.getOrNull()
-        virtualizer = runCatching { Virtualizer(0, audioSessionId) }.getOrNull()
+        noiseSuppressor = if (skipVendorEffects) null else runCatching { NoiseSuppressor.create(audioSessionId) }.getOrNull()
+        bassBoost = if (skipVendorEffects) null else runCatching { BassBoost(0, audioSessionId) }.getOrNull()
+        loudnessEnhancer = if (skipVendorEffects) null else runCatching { LoudnessEnhancer(audioSessionId) }.getOrNull()
+        virtualizer = if (skipVendorEffects) null else runCatching { Virtualizer(0, audioSessionId) }.getOrNull()
 
         runCatching { noiseSuppressor?.enabled = prefs.getBoolean("noise", false) }
         runCatching { bassBoost?.enabled = prefs.getBoolean("bass", false) }
